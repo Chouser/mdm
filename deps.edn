@@ -1,0 +1,9 @@
+{:deps {
+        org.igniterealtime.smack/smack-tcp {:mvn/version "4.4.6"}
+        org.igniterealtime.smack/smack-im {:mvn/version "4.4.6"}
+        org.igniterealtime.smack/smack-extensions {:mvn/version "4.4.6"}
+        org.igniterealtime.smack/smack-java8 {:mvn/version "4.4.6"}
+        org.igniterealtime.smack/smack-xmlparser-xpp3 {:mvn/version "4.4.6"}
+        org.igniterealtime.smack/smack-resolver-javax {:mvn/version "4.4.6"}
+        org.eclipse.paho/org.eclipse.paho.mqttv5.client {:mvn/version "1.2.5"}
+        }}
