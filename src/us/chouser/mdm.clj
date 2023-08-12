@@ -63,7 +63,7 @@
   (println "TEXT:" text)
   #_
   (let [conn (jab/connect {:host "xabber.org"
-                           :username "chouser"
+                           :username "ottowarburg"
                            :password (get-secret :xmpp-password)})]
     (try
       (-> (jab/join-muc conn
