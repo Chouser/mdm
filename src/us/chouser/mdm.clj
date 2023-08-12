@@ -23,8 +23,8 @@
   "Pure function to decide what alert message to send if any. Return updated
   state."
   [state now]
-  (let [p-since (quot (- now (:pressure-ts state 0)) 1000)
-        w-since (quot (- now (:weight-ts state 0)) 1000)
+  (let [p-since (quot (- now (:pressure-ts state now)) 1000)
+        w-since (quot (- now (:weight-ts state now)) 1000)
         branch [(if (:pressure-alerted? state) 1 0)
                 (if (:weight-alerted? state) 1 0)
                 (if (< pressure-alert-secs p-since) 1 0)
