@@ -61,7 +61,6 @@
 
 (defn send-group-text [text]
   (println "TEXT:" text)
-  #_
   (let [conn (jab/connect {:host "xabber.org"
                            :username "ottowarburg"
                            :password (get-secret :xmpp-password)})]
