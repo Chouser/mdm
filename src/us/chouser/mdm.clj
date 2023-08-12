@@ -60,6 +60,8 @@
          [1 1 1 1] nil))))
 
 (defn send-group-text [text]
+  (println "TEXT:" text)
+  #_
   (let [conn (jab/connect {:host "xabber.org"
                            :username "chouser"
                            :password (get-secret :xmpp-password)})]
@@ -70,9 +72,6 @@
                          :password (get-secret :muc-password)})
           (jab/send-muc text))
       (finally (jab/disconnect conn)))))
-
-(defn send-group-text [text]
-  (println "TEXT:" text))
 
 (defn alert-as-needed [sys]
   (let [{:keys [state]}
