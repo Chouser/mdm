@@ -22,8 +22,8 @@
   "Pure function to decide what alert message to send if any. Return updated
   state."
   [state now]
-  (let [p-since (quot (- now (:pressure-ts state)) 1000)
-        w-since (quot (- now (:weight-ts state)) 1000)
+  (let [p-since (quot (- now (:pressure-ts state 0)) 1000)
+        w-since (quot (- now (:weight-ts state 0)) 1000)
         branch [(if (:pressure-alerted? state) 1 0)
                 (if (:weight-alerted? state) 1 0)
                 (if (< pressure-alert-secs p-since) 1 0)
@@ -111,7 +111,7 @@
     (send-group-text
      (if-not (:stat-start old)
        "Started and connected."
-       (format "Over the last %s hours, I've seen %s."
+       (format "Over the last %.1f hours, I've seen %s."
                (-> now (- (:stat-start old)) (quot 1000) (quot 60) (/ 60.0))
                (->> old :metric
                     (map (fn [[topic n]]
@@ -121,17 +121,20 @@
 
 (defn on-mqtt-msg [sys {:keys [topic msg]}]
   (when-not (:stop? @sys)
-    (let [now (System/currentTimeMillis)]
-      (swap! sys update-in [:metric topic] (fnil inc 0))
-      (case topic
-        "Pressure" (do
-                     (swap! sys assoc-in [:state :pressure-ts] now)
-                     (reschedule! sys alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
-        "Weight" (do
-                   (swap! sys assoc-in [:state :weight-ts] now)
-                   (reschedule! sys alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
-        :ignore)
-      (alert-as-needed sys))))
+    (try
+      (let [now (System/currentTimeMillis)]
+        (swap! sys update-in [:metric topic] (fnil inc 0))
+        (case topic
+          "Pressure" (do
+                       (swap! sys assoc-in [:state :pressure-ts] now)
+                       (reschedule! sys alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
+          "Weight" (do
+                     (swap! sys assoc-in [:state :weight-ts] now)
+                     (reschedule! sys alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
+          :ignore)
+        (alert-as-needed sys))
+      (catch Exception ex
+        (prn ex)))))
 
 (defn start []
   (doto (atom {})
@@ -151,7 +154,8 @@
   (mqtt/disconnect (:mqtt-client @sys)))
 
 (defn -main []
-  (start))
+  (def sys
+    (start)))
 
 (comment
 
