@@ -128,10 +128,10 @@
         (case topic
           "Pressure" (do
                        (swap! sys assoc-in [:state :pressure-ts] now)
-                       (reschedule! sys alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
+                       (reschedule! sys #'alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
           "Weight" (do
                      (swap! sys assoc-in [:state :weight-ts] now)
-                     (reschedule! sys alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
+                     (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
           :ignore)
         (alert-as-needed sys))
       (catch Exception ex
