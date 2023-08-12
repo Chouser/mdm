@@ -133,7 +133,7 @@
                      (swap! sys assoc-in [:state :weight-ts] now)
                      (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
           :ignore)
-        (alert-as-needed sys))
+        (future (alert-as-needed sys)))
       (catch Exception ex
         (prn ex)))))
 
