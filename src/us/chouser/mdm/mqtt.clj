@@ -12,7 +12,10 @@
 (defn connect [{:keys [address client-id]}]
   (doto (MqttClient. address client-id (MemoryPersistence.))
     (.connect (doto (MqttConnectionOptions.)
-                (.setCleanStart false)))))
+                ;; We're not trying to receive every message, but instead
+                ;; monitor that fresh messages are can be received. Use
+                ;; CleanStart to disable message persistence:
+                (.setCleanStart true)))))
 
 (defn subscribe [^MqttClient client {:keys [topic qos msg-fn]}]
   (let [sub (MqttSubscription. topic (or qos 1))]
