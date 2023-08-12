@@ -7,6 +7,7 @@
 (set! *warn-on-reflection* true)
 
 (def bot-name "Otto")
+(def version "1.0")
 
 (def get-secret
   (partial get (edn/read-string (slurp "secrets.edn"))))
@@ -110,14 +111,15 @@
                                      (dissoc :metric)))]
     (send-group-text
      (if-not (:stat-start old)
-       "Started and connected."
-       (format "Over the last %.1f hours, I've seen %s."
+       (str "Started and connected version " version)
+       (format "Over the last %.1f hours, I've seen %s. This is version %s"
                (-> now (- (:stat-start old)) (quot 1000) (quot 60) (/ 60.0))
                (->> old :metric
                     (map (fn [[topic n]]
                            (format "%d %s signals" n topic)))
-                    (str/join ", ")))))
-    (reschedule! sys daily-report :daily (seconds-til-daily-report now))))
+                    (str/join ", "))
+               version)))
+    (reschedule! sys #'daily-report :daily (seconds-til-daily-report now))))
 
 (defn on-mqtt-msg [sys {:keys [topic msg]}]
   (when-not (:stop? @sys)
