@@ -7,7 +7,7 @@
 (set! *warn-on-reflection* true)
 
 (def bot-name "Otto")
-(def version "1.0")
+(def version "1.1")
 
 (def get-secret
   (partial get (edn/read-string (slurp "secrets.edn"))))
@@ -183,20 +183,5 @@
 
   (def sys (start))
   (stop sys)
-
-  (def xmpp-conn
-    (jab/connect {:host "xabber.org"
-                  :username "chouser"
-                  :password (get-secret :xmpp-password)}))
-
-  (def muc
-    (jab/join-muc xmpp-conn
-                  {:address (get-secret :muc-address)
-                   :nickname "Christopher"
-                   :password (get-secret :muc-password)}))
-
-  (jab/send-muc muc "Thanks. No big rush, though...")
-
-  (jab/disconnect xmpp-conn)
 
   )

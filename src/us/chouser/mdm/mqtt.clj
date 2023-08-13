@@ -14,7 +14,7 @@
     (.connect (doto (MqttConnectionOptions.)
                 (.setAutomaticReconnect true)
                 ;; We're not trying to receive every message, but instead
-                ;; monitor that fresh messages are can be received. Use
+                ;; monitor that fresh messages are being received. Use
                 ;; CleanStart to disable message persistence:
                 (.setCleanStart true)))))
 
