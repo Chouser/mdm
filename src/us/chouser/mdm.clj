@@ -14,6 +14,7 @@
 
 (def pressure-alert-secs 300)
 (def weight-alert-secs 300)
+(def alert-reminder-secs 900)
 (def fudge-secs 5)
 
 (defn time-str [seconds]
@@ -30,39 +31,50 @@
   [state now]
   (let [p-since (quot (- now (:pressure-ts state now)) 1000)
         w-since (quot (- now (:weight-ts state now)) 1000)
+        m-since (quot (- now (:msg-ts state now)) 1000)
         branch [(if (:pressure-alerted? state) 1 0)
                 (if (:weight-alerted? state) 1 0)
                 (if (< pressure-alert-secs p-since) 1 0)
-                (if (< weight-alert-secs w-since) 1 0)]]
-    (assoc
-     state
-     :pressure-alerted? (< pressure-alert-secs p-since)
-     :weight-alerted? (< weight-alert-secs w-since)
-     :alert-msg
-     , (case branch
-         [0 0 0 0] nil
-         [0 0 0 1] (str "Alert! No Weight signal received for " (time-str w-since) ".")
-         [0 0 1 0] (str "Alert! No Pressure signal received for " (time-str p-since) ".")
-         [0 0 1 1] (str "Alert! No Pressure signal received for " (time-str p-since)
-                        ", and no Weight signal for " (time-str w-since) ".")
-         [0 1 0 0] "Cleared all alerts: Weight signal received."
-         [0 1 0 1] nil
-         [0 1 1 0] (str "Alert! No Pressure signal received for " (time-str p-since)
-                        ". But weirdly a Weight signal was just received, "
-                        "so that alert is cleared.")
-         [0 1 1 1] (str "Another alert! No Pressure signal received for " (time-str p-since)
-                        ", in addition to the Weight alert.")
-         [1 0 0 0] "Cleared all alerts: Pressure signal received."
-         [1 0 0 1] (str "Alert! No Weight signal received for " (time-str w-since)
-                        ". But weirdly a Pressure signal was just received, "
-                        "so that alert is cleared.")
-         [1 0 1 0] nil
-         [1 0 1 1] (str "Another alert! No Weight signal received for " (time-str w-since)
-                        ", in addition to the Pressure alert.")
-         [1 1 0 0] "Cleared all alerts: Weight and Pressure signals received."
-         [1 1 0 1] "Cleared one alert: Pressure signal received; still waiting for a Weight signal."
-         [1 1 1 0] "Cleared one alert: Weight signal received; still waiting for a Pressure signal."
-         [1 1 1 1] nil))))
+                (if (< weight-alert-secs w-since) 1 0)]
+        msg
+        , (case branch
+            [0 0 0 0] nil
+            [0 0 0 1] (str "Alert! No Weight signal received for " (time-str w-since) ".")
+            [0 0 1 0] (str "Alert! No Pressure signal received for " (time-str p-since) ".")
+            [0 0 1 1] (str "Alert! No Pressure signal received for " (time-str p-since)
+                           ", and no Weight signal for " (time-str w-since) ".")
+            [0 1 0 0] "Cleared all alerts: Weight signal received."
+            [0 1 0 1] nil
+            [0 1 1 0] (str "Alert! No Pressure signal received for " (time-str p-since)
+                           ". But weirdly a Weight signal was just received, "
+                           "so that alert is cleared.")
+            [0 1 1 1] (str "Another alert! No Pressure signal received for " (time-str p-since)
+                           ", in addition to the Weight alert.")
+            [1 0 0 0] "Cleared all alerts: Pressure signal received."
+            [1 0 0 1] (str "Alert! No Weight signal received for " (time-str w-since)
+                           ". But weirdly a Pressure signal was just received, "
+                           "so that alert is cleared.")
+            [1 0 1 0] nil
+            [1 0 1 1] (str "Another alert! No Weight signal received for " (time-str w-since)
+                           ", in addition to the Pressure alert.")
+            [1 1 0 0] "Cleared all alerts: Weight and Pressure signals received."
+            [1 1 0 1] "Cleared one alert: Pressure signal received; still waiting for a Weight signal."
+            [1 1 1 0] "Cleared one alert: Weight signal received; still waiting for a Pressure signal."
+            [1 1 1 1] nil)
+        msg (or msg
+                (when (and (< alert-reminder-secs m-since)
+                           (or (:pressure-alerted? state)
+                               (:weight-alerted? state)))
+                  (str "Still alerted"
+                       (when (:pressure-alerted? state)
+                         (str ", " (time-str p-since) " since last Pressure signal"))
+                       (when (:weight-alerted? state)
+                         (str ", " (time-str w-since) " since last Weight signal")))))]
+    (assoc state
+           :pressure-alerted? (< pressure-alert-secs p-since)
+           :weight-alerted? (< weight-alert-secs w-since)
+           :msg-ts (if msg now (:msg-ts state now))
+           :alert-msg msg)))
 
 (defn send-group-text [text]
   (println "TEXT:" text)
@@ -92,6 +104,10 @@
                     ^Runnable (partial f sys)
                     (long secs)
                     java.util.concurrent.TimeUnit/SECONDS)))
+
+(defn alert-reminder [sys]
+  (alert-as-needed sys)
+  (reschedule! sys #'alert-reminder :alert-reminder (+ fudge-secs alert-reminder-secs)))
 
 (defn seconds-til-daily-report [now-millis]
   (let [target-time (java.time.LocalTime/of 15 0) ;; 3pm local
@@ -150,6 +166,7 @@
     (as-> sys
         (swap! sys assoc :mqtt-sub
                (mqtt/subscribe (:mqtt-client @sys) {:topic "#" :msg-fn (partial #'on-mqtt-msg sys)})))
+    (alert-reminder)
     (daily-report)))
 
 (defn stop [sys]
