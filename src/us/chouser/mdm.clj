@@ -17,7 +17,12 @@
 (def fudge-secs 5)
 
 (defn time-str [seconds]
-  (str seconds " seconds"))
+  (cond
+    (< seconds   100) (str seconds " seconds")
+    (< seconds   597) (format "%.1f minutes" (/ seconds 60.0))
+    (< seconds  5970) (format "%.0f minutes" (/ seconds 60.0))
+    (< seconds 35820) (format "%.1f hours"   (/ seconds 3600.0))
+    :else             (format "%.0f hours"   (/ seconds 3600.0))))
 
 (defn check-state
   "Pure function to decide what alert message to send if any. Return updated
@@ -110,8 +115,8 @@
     (send-group-text
      (if-not (:stat-start old)
        (str "Started and connected version " version)
-       (format "Over the last %.1f hours, I've seen %s. This is version %s"
-               (-> now (- (:stat-start old)) (quot 1000) (quot 60) (/ 60.0))
+       (format "Over the last %s, I've seen %s. This is version %s"
+               (time-str (/ (- now (:stat-start old)) 1000.0))
                (->> old :metric
                     (map (fn [[topic n]]
                            (format "%d %s signals" n topic)))
