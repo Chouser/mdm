@@ -12,6 +12,7 @@
 (defn connect [{:keys [address client-id]}]
   (doto (MqttClient. address client-id (MemoryPersistence.))
     (.connect (doto (MqttConnectionOptions.)
+                (.setAutomaticReconnect true)
                 ;; We're not trying to receive every message, but instead
                 ;; monitor that fresh messages are can be received. Use
                 ;; CleanStart to disable message persistence:
