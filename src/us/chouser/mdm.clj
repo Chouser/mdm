@@ -7,7 +7,7 @@
 (set! *warn-on-reflection* true)
 
 (def bot-name "Otto")
-(def version "1.1")
+(def version "1.2")
 
 (def get-secret
   (partial get (edn/read-string (slurp "secrets.edn"))))
