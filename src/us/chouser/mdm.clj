@@ -12,8 +12,8 @@
 (def get-secret
   (partial get (edn/read-string (slurp "secrets.edn"))))
 
-(def pressure-alert-secs 300)
-(def weight-alert-secs 300)
+(def pressure-alert-secs 660)
+(def weight-alert-secs 660)
 (def alert-reminder-secs 900)
 (def fudge-secs 5)
 
