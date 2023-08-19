@@ -1,4 +1,4 @@
 .cpcache
 .nrepl-port
-secrets.edn
+*secrets*
 notes.txt

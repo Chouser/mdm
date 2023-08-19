@@ -1,5 +1,6 @@
 (ns us.chouser.mdm
   (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [us.chouser.mdm.jab :as jab]
             [us.chouser.mdm.mqtt :as mqtt]))
@@ -10,7 +11,10 @@
 (def version "1.2")
 
 (def get-secret
-  (partial get (edn/read-string (slurp "secrets.edn"))))
+  (let [[filename] (->> ["secrets.edn" "secrets-test.edn"]
+                        (filter #(.exists (io/file %))))]
+    (println "Using secrets:" (pr-str filename))
+    (partial get (edn/read-string (slurp filename)))))
 
 (def pressure-alert-secs 660)
 (def weight-alert-secs 660)
@@ -79,17 +83,19 @@
            :alert-msg msg)))
 
 (defn send-group-text [text]
-  (println "TEXT:" text)
-  (let [conn (jab/connect {:host "xabber.org"
-                           :username "ottowarburg"
-                           :password (get-secret :xmpp-password)})]
-    (try
-      (-> (jab/join-muc conn
-                        {:address (get-secret :muc-address)
-                         :nickname bot-name
-                         :password (get-secret :muc-password)})
-          (jab/send-muc text))
-      (finally (jab/disconnect conn)))))
+  (if-let [pw (get-secret :xmpp-password)]
+    (let [conn (jab/connect {:host "xabber.org"
+                             :username "ottowarburg"
+                             :password pw})]
+      (println "TEXT:" text)
+      (try
+        (-> (jab/join-muc conn
+                          {:address (get-secret :muc-address)
+                           :nickname bot-name
+                           :password (get-secret :muc-password)})
+            (jab/send-muc text))
+        (finally (jab/disconnect conn))))
+    (println "TEST TEXT:" text)))
 
 (defn alert-as-needed [sys]
   (let [{:keys [state]}
