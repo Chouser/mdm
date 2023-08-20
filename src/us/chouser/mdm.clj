@@ -8,7 +8,7 @@
 (set! *warn-on-reflection* true)
 
 (def bot-name "Otto")
-(def version "1.2")
+(def version "1.3")
 
 (def get-secret
   (let [[filename] (->> ["secrets.edn" "secrets-test.edn"]
