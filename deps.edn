@@ -1,9 +1,11 @@
 {:deps {
+        org.apache.logging.log4j/log4j-api {:mvn/version "2.20.0"}
+        org.apache.logging.log4j/log4j-core {:mvn/version "2.20.0"}
+        org.eclipse.paho/org.eclipse.paho.mqttv5.client {:mvn/version "1.2.5"}
         org.igniterealtime.smack/smack-tcp {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-im {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-extensions {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-java8 {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-xmlparser-xpp3 {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-resolver-javax {:mvn/version "4.4.6"}
-        org.eclipse.paho/org.eclipse.paho.mqttv5.client {:mvn/version "1.2.5"}
         }}
