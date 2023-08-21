@@ -1,6 +1,6 @@
 (ns us.chouser.mdm.mqtt
   (:import (org.eclipse.paho.mqttv5.client
-            IMqttMessageListener MqttClient MqttConnectionOptions)
+            IMqttMessageListener MqttCallback MqttClient MqttConnectionOptions)
            (org.eclipse.paho.mqttv5.client.persist MemoryPersistence)
            (org.eclipse.paho.mqttv5.common MqttSubscription)))
 
@@ -11,6 +11,20 @@
 
 (defn connect [{:keys [address client-id]}]
   (doto (MqttClient. address client-id (MemoryPersistence.))
+    (.setCallback
+     (reify MqttCallback
+       (disconnected [_ resp]
+         (println "mqtt disconnected:" resp))
+       (mqttErrorOccurred [_ ex]
+         (println "mqtt error occurred:" ex))
+       (messageArrived [_ topic message]
+         :ignore)
+       (deliveryComplete [_ token]
+         (println "mqtt delivery complete:" token))
+       (connectComplete [_ reconnect uri]
+         (println "mqtt connect complete:" reconnect uri))
+       (authPacketArrived [_ reasonCode properties]
+         (println "mqtt auth packet arrived:" reasonCode properties))))
     (.connect (doto (MqttConnectionOptions.)
                 (.setAutomaticReconnect true)
                 ;; We're not trying to receive every message, but instead
