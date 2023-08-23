@@ -7,7 +7,6 @@
 
 (set! *warn-on-reflection* true)
 
-(def bot-name "Otto")
 (def version "1.3")
 
 (def get-secret
@@ -91,7 +90,7 @@
       (try
         (-> (jab/join-muc conn
                           {:address (get-secret :muc-address)
-                           :nickname bot-name
+                           :nickname (get-secret :bot-name)
                            :password (get-secret :muc-password)})
             (jab/send-muc text))
         (finally (jab/disconnect conn))))
@@ -169,7 +168,7 @@
   (doto (atom {})
     (swap! assoc
            :mqtt-client (mqtt/connect {:address (get-secret :mqtt-broker)
-                                       :client-id "Otto"})
+                                       :client-id (get-secret :bot-name)})
            :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))
     (as-> sys
         (swap! sys assoc :mqtt-sub
