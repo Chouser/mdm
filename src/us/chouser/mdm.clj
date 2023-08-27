@@ -3,7 +3,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [us.chouser.mdm.jab :as jab]
-            [us.chouser.mdm.mqtt :as mqtt]))
+            [us.chouser.mdm.mqtt :as mqtt]
+            [us.chouser.mdm.sqlite-stats :as s.stats]))
 
 (set! *warn-on-reflection* true)
 
@@ -150,29 +151,46 @@
 (defn on-mqtt-msg [sys {:keys [topic msg]}]
   (when-not (:stop? @sys)
     (try
-      (let [now (System/currentTimeMillis)]
+      (let [now (System/currentTimeMillis)
+            prev-state (:state @sys)
+            collector (:collector @sys)]
         (swap! sys update-in [:metric topic] (fnil inc 0))
         (case topic
           "Pressure" (do
                        (swap! sys assoc-in [:state :pressure-ts] now)
+                       (s.stats/record collector `value
+                                       {:topic topic} (Double/parseDouble msg))
+                       (when-let [prev (:pressure-ts prev-state)]
+                         (s.stats/record collector `interval {:topic topic} (- now prev)))
                        (reschedule! sys #'alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
           "Weight" (do
                      (swap! sys assoc-in [:state :weight-ts] now)
+                     (s.stats/record collector `value
+                                     {:topic topic} (try (Double/parseDouble msg)
+                                                         (catch Exception _ msg)))
+                     (when-let [prev (:weight-ts prev-state)]
+                       (s.stats/record collector `interval {:topic topic} (- now prev)))
                      (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
           :ignore)
         (future (alert-as-needed sys)))
       (catch Exception ex
-        (prn ex)))))
+        (prn :on-mqtt-msg ex)))))
 
 (defn start []
   (doto (atom {})
     (swap! assoc
+           :collector (s.stats/start
+                       {:filename (get-secret :metrics-filename)
+                        :meta {`value    {:tagtypes {:topic :int}}
+                               `interval {:tagtypes {:topic :int}}}})
            :mqtt-client (mqtt/connect {:address (get-secret :mqtt-broker)
                                        :client-id (get-secret :bot-name)})
            :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))
-    (as-> sys
-        (swap! sys assoc :mqtt-sub
-               (mqtt/subscribe (:mqtt-client @sys) {:topic "#" :msg-fn (partial #'on-mqtt-msg sys)})))
+    ((fn [sys]
+       (swap! sys assoc :mqtt-sub
+              (mqtt/subscribe (:mqtt-client @sys)
+                              {:topic "#"
+                               :msg-fn #(on-mqtt-msg sys %)}))))
     (alert-reminder)
     (daily-report)))
 
@@ -180,7 +198,10 @@
   (swap! sys assoc :stop? true)
   (->> @sys :futures vals
        (run! #(.cancel ^java.util.concurrent.Future % false)))
-  (mqtt/disconnect (:mqtt-client @sys)))
+  (mqtt/disconnect (:mqtt-client @sys))
+  (when-let [s ^java.util.concurrent.ExecutorService (:scheduler sys)]
+    (.shutdown s)
+    (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS)))
 
 (defn -main []
   (def sys
