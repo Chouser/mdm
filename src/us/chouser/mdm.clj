@@ -165,16 +165,17 @@
         (case topic
           "Pressure" (do
                        (swap! sys assoc-in [:state :pressure-ts] now)
-                       (s.stats/record collector `value
-                                       {:topic topic} (Double/parseDouble msg))
+                       (when (re-matches #"[-.\d]+" msg)
+                         (s.stats/record collector `value
+                                         {:topic topic} (Double/parseDouble msg)))
                        (when-let [prev (:pressure-ts prev-state)]
                          (s.stats/record collector `interval {:topic topic} (- now prev)))
                        (reschedule! sys #'alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
           "Weight" (do
                      (swap! sys assoc-in [:state :weight-ts] now)
-                     (s.stats/record collector `value
-                                     {:topic topic} (try (Double/parseDouble msg)
-                                                         (catch Exception _ msg)))
+                     (when (re-matches #"[-.\d]+" msg)
+                       (s.stats/record collector `value
+                                       {:topic topic} (Double/parseDouble msg)))
                      (when-let [prev (:weight-ts prev-state)]
                        (s.stats/record collector `interval {:topic topic} (- now prev)))
                      (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
