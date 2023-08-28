@@ -82,20 +82,24 @@
            :msg-ts (if msg now (:msg-ts state now))
            :alert-msg msg)))
 
-(defn send-group-text [text]
-  (if-let [pw (get-secret :xmpp-password)]
-    (let [conn (jab/connect {:host "xabber.org"
-                             :username "ottowarburg"
-                             :password pw})]
-      (println "TEXT:" text)
-      (try
-        (-> (jab/join-muc conn
-                          {:address (get-secret :muc-address)
-                           :nickname (get-secret :bot-name)
-                           :password (get-secret :muc-password)})
-            (jab/send-muc text))
-        (finally (jab/disconnect conn))))
-    (println "TEST TEXT:" text)))
+(defn send-group-text [muc-key text]
+  (let [muc (-> (get-secret :mucs) (get muc-key))]
+    (when-not muc
+      (throw (ex-info (str "Bad muc key: " (pr-str muc-key))
+                      {:muc-key muc-key :mucs (keys (get-secret :mucs))})))
+    (if-let [pw (get-secret :xmpp-password)]
+      (let [conn (jab/connect {:host "xabber.org"
+                               :username "ottowarburg"
+                               :password pw})]
+        (println muc-key "TEXT:" text)
+        (try
+          (-> (jab/join-muc conn
+                            {:address (:address muc)
+                             :password (:password muc)
+                             :nickname (get-secret :bot-name)})
+              (jab/send-muc text))
+          (finally (jab/disconnect conn))))
+      (println muc-key "TEST TEXT:" text))))
 
 (defn alert-as-needed [sys]
   (let [{:keys [state]}
@@ -103,7 +107,9 @@
                  check-state
                  (System/currentTimeMillis))
         msg (:alert-msg state)]
-    (some-> msg send-group-text)))
+    (when msg
+      (send-group-text (if (re-find #"Still" msg) :general :tech)
+                       msg))))
 
 (defn reschedule! [sys f k secs]
   (some-> @sys ^java.util.concurrent.Future (get-in [:futures k]) (.cancel false))
@@ -137,6 +143,7 @@
                                      (assoc :stat-start now)
                                      (dissoc :metric)))]
     (send-group-text
+     :tech
      (if-not (:stat-start old)
        (str "Started and connected version " version)
        (format "Over the last %s, I've seen %s. This is version %s"
