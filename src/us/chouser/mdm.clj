@@ -186,19 +186,17 @@
 
 (defn start []
   (doto (atom {})
-    (swap! assoc
-           :collector (s.stats/start
-                       {:filename (get-secret :metrics-filename)
-                        :meta {`value    {:tagtypes {:topic :int}}
-                               `interval {:tagtypes {:topic :int}}}})
-           :mqtt-client (mqtt/connect {:address (get-secret :mqtt-broker)
-                                       :client-id (get-secret :bot-name)})
-           :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))
     ((fn [sys]
-       (swap! sys assoc :mqtt-sub
-              (mqtt/subscribe (:mqtt-client @sys)
-                              {:topic "#"
-                               :msg-fn #(on-mqtt-msg sys %)}))))
+       (swap! sys assoc
+              :collector (s.stats/start
+                          {:filename (get-secret :metrics-filename)
+                           :meta {`value    {:tagtypes {:topic :int}}
+                                  `interval {:tagtypes {:topic :int}}}})
+              :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
+                                        :client-id (get-secret :bot-name)
+                                        :subs [{:topic "#"
+                                                :msg-fn #(on-mqtt-msg sys %)}]})
+              :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))))
     (alert-reminder)
     (daily-report)))
 
@@ -206,7 +204,7 @@
   (swap! sys assoc :stop? true)
   (->> @sys :futures vals
        (run! #(.cancel ^java.util.concurrent.Future % false)))
-  (mqtt/disconnect (:mqtt-client @sys))
+  (mqtt/stop (:mqtt-client @sys))
   (when-let [s ^java.util.concurrent.ExecutorService (:scheduler sys)]
     (.shutdown s)
     (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS)))
