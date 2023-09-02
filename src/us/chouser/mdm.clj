@@ -8,7 +8,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def version "1.4")
+(def version "1.5")
 
 (def get-secret
   (let [[filename] (->> ["secrets.edn" "secrets-test.edn"]
