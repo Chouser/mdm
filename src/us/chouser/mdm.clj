@@ -155,29 +155,30 @@
                version)))
     (reschedule! sys #'daily-report :daily (seconds-til-daily-report now))))
 
+(s.stats/register-metrics
+ {::value    {:tag-types {:topic :string}}
+  ::interval {:tag-types {:topic :string}}})
+
 (defn on-mqtt-msg [sys {:keys [topic msg]}]
   (when-not (:stop? @sys)
     (try
       (let [now (System/currentTimeMillis)
-            prev-state (:state @sys)
-            collector (:collector @sys)]
+            prev-state (:state @sys)]
         (swap! sys update-in [:metric topic] (fnil inc 0))
         (case topic
           "Pressure" (do
                        (swap! sys assoc-in [:state :pressure-ts] now)
                        (when (re-matches #"[-.\d]+" msg)
-                         (s.stats/record collector `value
-                                         {:topic topic} (Double/parseDouble msg)))
+                         (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
                        (when-let [prev (:pressure-ts prev-state)]
-                         (s.stats/record collector `interval {:topic topic} (- now prev)))
+                         (s.stats/record ::interval {:topic topic} (- now prev)))
                        (reschedule! sys #'alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
           "Weight" (do
                      (swap! sys assoc-in [:state :weight-ts] now)
                      (when (re-matches #"[-.\d]+" msg)
-                       (s.stats/record collector `value
-                                       {:topic topic} (Double/parseDouble msg)))
+                       (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
                      (when-let [prev (:weight-ts prev-state)]
-                       (s.stats/record collector `interval {:topic topic} (- now prev)))
+                       (s.stats/record ::interval {:topic topic} (- now prev)))
                      (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
           :ignore)
         (future (alert-as-needed sys)))
@@ -185,13 +186,11 @@
         (prn :on-mqtt-msg ex)))))
 
 (defn start []
+  (s.stats/start-global {:filename (get-secret :metrics-filename)
+                         :period-secs (get-secret :metrics-period-secs (* 5 60))})
   (doto (atom {})
     ((fn [sys]
        (swap! sys assoc
-              :collector (s.stats/start
-                          {:filename (get-secret :metrics-filename)
-                           :meta {`value    {:tagtypes {:topic :int}}
-                                  `interval {:tagtypes {:topic :int}}}})
               :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
                                         :client-id (get-secret :bot-name)
                                         :subs [{:topic "#"
@@ -207,7 +206,8 @@
   (mqtt/stop (:mqtt-client @sys))
   (when-let [s ^java.util.concurrent.ExecutorService (:scheduler sys)]
     (.shutdown s)
-    (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS)))
+    (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS))
+  (s.stats/stop-global))
 
 (defn -main []
   (def sys

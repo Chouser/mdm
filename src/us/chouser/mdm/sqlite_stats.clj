@@ -5,43 +5,56 @@
 
 (set! *warn-on-reflection* true)
 
-(defn record [collector metric tagmap value]
-  (swap! collector
-         (fn [c]
-           (let [{:keys [bucket-maxs tagtypes]} (get-in c [:meta metric])]
-             (update-in c [:vals (assoc tagmap :metric metric)]
-                        (fn [v]
-                          (if v
-                            {:vmin (min value (:vmin v))
-                             :vmax (max value (:vmax v))
-                             :vsum (+ value (:vsum v))
-                             :vcount (inc (:vcount v))}
-                            {:vmin value
-                             :vmax value
-                             :vsum value
-                             :vcount 1})))))))
+(defonce ^:private global-collector nil)
 
-(defn columns [tagtypes]
+(defonce ^:private *metric-info (atom {}))
+
+(defn register-metrics [m]
+  (swap! *metric-info merge m))
+
+(defn record
+  ([metric tagmap value]
+   (record global-collector metric tagmap value))
+  ([collector metric tagmap value]
+   (let [{:keys [bucket-maxs tag-types]} (get @*metric-info metric)]
+     (if-not tag-types
+       (println "ERROR: Not recording unregistered metric" (pr-str metric))
+       (swap! collector update-in [:values (assoc tagmap :metric metric)]
+              (fn [v]
+                (if v
+                  {:vmin (min value (:vmin v))
+                   :vmax (max value (:vmax v))
+                   :vsum (+ value (:vsum v))
+                   :vcount (inc (:vcount v))}
+                  {:vmin value
+                   :vmax value
+                   :vsum value
+                   :vcount 1})))))))
+
+(defn- columns [tag-types]
   (-> [[:time :int]]
-      (into tagtypes)
+      (into tag-types)
       (into (map vector [:vmin :vmax :vsum :vcount] (repeat :int)))))
 
-(defn metric-create-table
-  [[metric {:keys [tagtypes]}]]
-  (->> (columns tagtypes)
+(defn- metric-table-name [metric]
+  (pr-str (str (namespace metric) "/" (name metric))))
+
+(defn- metric-create-table
+  [metric-info metric]
+  (->> (get metric-info metric) :tag-types columns
        (map (fn [[k t]]
               (str (pr-str (name k)) " " (name t))))
        (str/join ", ")
        (format "create table if not exists %s (%s)"
-               (pr-str (str metric)))))
+               (metric-table-name metric))))
 
-(defn metric-insert-values [now meta values]
+(defn- metric-insert-values [now metric-info values]
   (for [[metric pairs] (group-by #(-> % key :metric) values)
-        :let [cols (-> meta (get metric) :tagtypes columns
+        :let [cols (-> metric-info (get metric) :tag-types columns
                        (->> (map first)))]
         [tagmap nums] pairs]
     (format "insert into %s values(%s)"
-            (pr-str (str metric))
+            (metric-table-name metric)
             (->> cols
                  (map (merge tagmap nums {:time now}))
                  (map #(cond
@@ -50,30 +63,39 @@
                          :else (pr-str (str %))))
                  (str/join ", ")))))
 
-(defn write [collector]
-  (let [[{:keys [conn meta vals]} _] (swap-vals! collector assoc :vals {})
-        now (quot (System/currentTimeMillis) 1000)
-        statement (.createStatement ^Connection conn)] ;; TODO Use prepared statements
-    (->> (metric-insert-values now meta vals)
-         (run! #(.executeUpdate statement %)))))
+(defn- write [collector]
+  (try
+    (let [[{:keys [conn created-tables values]} _] (swap-vals! collector assoc :values {})
+          new-metrics (->> values
+                           (map #(:metric (key %)))
+                           (remove created-tables)
+                           set)
+          now (quot (System/currentTimeMillis) 1000)
+          statement (.createStatement ^Connection conn)] ;; TODO Use prepared statements
+      (->> new-metrics
+           (map #(metric-create-table @*metric-info %))
+           (run! #(.executeUpdate statement %)))
+      (->> (metric-insert-values now @*metric-info values)
+           (run! #(.executeUpdate statement %)))
+      (swap! collector update :created-tables into new-metrics))
+    (catch Exception ex
+      (.printStackTrace ex))))
 
-(def period (* 5 60))
-
-(defn start [{:keys [filename meta]}]
+(defn start [{:keys [filename period-secs]}]
   (let [conn (DriverManager/getConnection (str "jdbc:sqlite:" filename))
         statement (.createStatement conn)
         pool (Executors/newScheduledThreadPool 0)
-        collector (atom {:meta meta
-                         :conn conn
-                         :pool pool})]
-    (->> meta
-         (run! #(->> (metric-create-table %)
-                     (.executeUpdate statement))))
-    (.scheduleAtFixedRate pool
-                          #(write collector)
-                          (- period (rem (System/currentTimeMillis) period))
-                          period
-                          TimeUnit/SECONDS)
+        collector (atom {:conn conn
+                         :pool pool
+                         :created-tables #{}})]
+    (swap! collector assoc :future
+           (.scheduleAtFixedRate pool
+                                 #(write collector)
+                                 (- period-secs
+                                    (rem (quot (System/currentTimeMillis) 1000)
+                                         period-secs))
+                                 period-secs
+                                 TimeUnit/SECONDS))
     collector))
 
 (defn stop [collector]
@@ -81,6 +103,25 @@
     (.shutdown pool)
     (.awaitTermination pool 5 TimeUnit/SECONDS)
     (.close ^Connection (:conn @collector))))
+
+(defn start-global [config]
+  (alter-var-root
+   #'global-collector
+   (fn [old]
+     (if-not old
+       (start config)
+       (do
+         (println "ERROR: global collector already exists; refusing to start another")
+         old)))))
+
+(defn stop-global []
+  (alter-var-root
+   #'global-collector
+   (fn [old]
+     (if old
+       (stop old)
+       (println "WARNING: no global collector to stop"))
+     nil)))
 
 #_
 (defn result-maps [^ResultSet result-set]
