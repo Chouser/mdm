@@ -82,24 +82,44 @@
            :msg-ts (if msg now (:msg-ts state now))
            :alert-msg msg)))
 
-(defn send-group-text [muc-key text]
-  (let [muc (-> (get-secret :mucs) (get muc-key))]
-    (when-not muc
-      (throw (ex-info (str "Bad muc key: " (pr-str muc-key))
-                      {:muc-key muc-key :mucs (keys (get-secret :mucs))})))
-    (if-let [pw (get-secret :xmpp-password)]
-      (let [conn (jab/connect {:host "xabber.org"
-                               :username "ottowarburg"
-                               :password pw})]
-        (println muc-key "TEXT:" text)
-        (try
-          (-> (jab/join-muc conn
-                            {:address (:address muc)
-                             :password (:password muc)
-                             :nickname (get-secret :bot-name)})
-              (jab/send-muc text))
-          (finally (jab/disconnect conn))))
-      (println muc-key "TEST TEXT:" text))))
+(defn send-contact-text [conn contact text]
+  (let [{:keys [user-address muc-address password]}
+        , (-> (get-secret :contacts) (get contact))]
+    (cond
+      muc-address
+      , (-> (jab/join-muc conn
+                          {:address muc-address
+                           :password password
+                           :nickname (get-secret :bot-name)})
+            (jab/send-muc text))
+      user-address
+      , (jab/send-chat conn user-address text)
+      :else (println "ERROR: Bad contact:" (pr-str contact)))))
+
+(defn send-group-text [target text]
+  (let [cts (-> (get-secret :text-targets) (get target))]
+    (if-not cts
+      (println "ERROR: Bad text target:" (pr-str target))
+      (if-let [pw (get-secret :xmpp-password)]
+        (let [conn (jab/connect {:host "xabber.org"
+                                 :username "ottowarburg"
+                                 :password pw})]
+          (println target "TEXT:" text)
+          (try
+            (->> cts
+                 (run! #(send-contact-text conn % text)))
+            (finally (jab/disconnect conn))))
+        (println target "TEST TEXT:" text)))))
+
+(defn send-m []
+  (if-let [pw (get-secret :xmpp-password)]
+    (let [conn (jab/connect {:host "xabber.org"
+                             :username "ottowarburg"
+                             :password pw})]
+      (prn :conn conn)
+      (try
+        (jab/send-chat conn "chouser@xabber.org" "ok")
+        (finally (jab/disconnect conn))))))
 
 (defn alert-as-needed [sys]
   (let [{:keys [state]}
@@ -108,7 +128,7 @@
                  (System/currentTimeMillis))
         msg (:alert-msg state)]
     (when msg
-      (send-group-text (if (re-find #"Still" msg) :general :tech)
+      (send-group-text (if (re-find #"Still" msg) :reminder :alert)
                        msg))))
 
 (defn reschedule! [sys f k secs]
@@ -143,7 +163,7 @@
                                      (assoc :stat-start now)
                                      (dissoc :metric)))]
     (send-group-text
-     :tech
+     :status
      (if-not (:stat-start old)
        (str "Started and connected version " version)
        (format "Over the last %s, I've seen %s. This is version %s"

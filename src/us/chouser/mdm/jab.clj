@@ -1,8 +1,9 @@
 (ns us.chouser.mdm.jab
-  (:import (org.jivesoftware.smack.packet Message$Type)
+  (:import (org.jivesoftware.smack.packet Message Message$Type Presence Presence$Type)
            (org.jivesoftware.smack.tcp XMPPTCPConnection
                                        XMPPTCPConnectionConfiguration)
            (org.jivesoftware.smackx.muc MultiUserChat MultiUserChatManager)
+           (org.jivesoftware.smack.chat2 ChatManager)
            (org.jxmpp.jid.impl JidCreate)
            (org.jxmpp.jid.parts Resourcepart)))
 
@@ -31,3 +32,12 @@
 
 (defn disconnect [^XMPPTCPConnection conn]
   (.disconnect conn))
+
+(defn send-chat [^XMPPTCPConnection conn ^String address ^String msg]
+  (let [jid (JidCreate/entityBareFrom address)]
+    ;; Request private message authorization:
+    (.sendStanza conn (Presence. jid Presence$Type/subscribe))
+    ;; Send chat message:
+    (.send (.chatWith (ChatManager/getInstanceFor conn) jid)
+           (doto (Message. jid Message$Type/chat)
+             (.setBody msg)))))
