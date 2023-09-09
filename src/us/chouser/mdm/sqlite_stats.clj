@@ -65,12 +65,15 @@
 
 (defn- write [collector]
   (try
-    (let [[{:keys [conn created-tables values]} _] (swap-vals! collector assoc :values {})
+    (let [[state _] (swap-vals! collector assoc :values {})
+          {:keys [conn created-tables values period-secs]} state
           new-metrics (->> values
                            (map #(:metric (key %)))
                            (remove created-tables)
                            set)
-          now (quot (System/currentTimeMillis) 1000)
+          now (-> (System/currentTimeMillis)
+                  (quot 1000)
+                  (quot period-secs) (* period-secs))
           statement (.createStatement ^Connection conn)] ;; TODO Use prepared statements
       (->> new-metrics
            (map #(metric-create-table @*metric-info %))
@@ -89,6 +92,7 @@
         pool (Executors/newScheduledThreadPool 0)
         collector (atom {:conn conn
                          :pool pool
+                         :period-secs period-secs
                          :created-tables #{}})]
     (swap! collector assoc :future
            (.scheduleAtFixedRate pool
