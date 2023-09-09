@@ -5,7 +5,7 @@
 
 (set! *warn-on-reflection* true)
 
-(defonce ^:private global-collector nil)
+(defonce ^:private ^:dynamic *global-collector* nil)
 
 (defonce ^:private *metric-info (atom {}))
 
@@ -14,7 +14,7 @@
 
 (defn record
   ([metric tagmap value]
-   (record global-collector metric tagmap value))
+   (record *global-collector* metric tagmap value))
   ([collector metric tagmap value]
    (let [{:keys [bucket-maxs tag-types]} (get @*metric-info metric)]
      (if-not tag-types
@@ -82,6 +82,8 @@
       (.printStackTrace ex))))
 
 (defn start [{:keys [filename period-secs]}]
+  (assert filename)
+  (assert period-secs)
   (let [conn (DriverManager/getConnection (str "jdbc:sqlite:" filename))
         statement (.createStatement conn)
         pool (Executors/newScheduledThreadPool 0)
@@ -102,11 +104,12 @@
   (let [pool ^ExecutorService (:pool @collector)]
     (.shutdown pool)
     (.awaitTermination pool 5 TimeUnit/SECONDS)
+    (write collector)
     (.close ^Connection (:conn @collector))))
 
 (defn start-global [config]
   (alter-var-root
-   #'global-collector
+   #'*global-collector*
    (fn [old]
      (if-not old
        (start config)
@@ -116,14 +119,25 @@
 
 (defn stop-global []
   (alter-var-root
-   #'global-collector
+   #'*global-collector*
    (fn [old]
      (if old
        (stop old)
        (println "WARNING: no global collector to stop"))
      nil)))
 
-#_
+;; handy for tests:
+(defn with-collector* [config f]
+  (binding [*global-collector* (start config)]
+    (try
+      (f)
+      (finally
+        (stop *global-collector*)))))
+
+(defmacro with-collector [config & body]
+  `(with-collector* ~config
+     (fn with-collector# [] ~@body)))
+
 (defn result-maps [^ResultSet result-set]
   (let [md (.getMetaData result-set)
         cc (.getColumnCount md)
@@ -134,3 +148,10 @@
                               (mapv #(.getObject result-set (int (inc %))))
                               (zipmap names)))))
          (take-while some?))))
+
+(defn query
+  ([q] (query *global-collector* q))
+  ([collector q]
+   (let [{:keys [conn]} @collector
+         s (.createStatement ^Connection conn)]
+     (result-maps (.executeQuery s q)))))

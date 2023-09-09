@@ -177,7 +177,8 @@
 
 (s.stats/register-metrics
  {::value    {:tag-types {:topic :string}}
-  ::interval {:tag-types {:topic :string}}})
+  ::interval {:tag-types {:topic :string}}
+  ::reboot   {:tag-types {}}})
 
 (defn on-mqtt-msg [sys {:keys [topic msg]}]
   (when-not (:stop? @sys)
@@ -200,6 +201,8 @@
                      (when-let [prev (:weight-ts prev-state)]
                        (s.stats/record ::interval {:topic topic} (- now prev)))
                      (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
+          "BoinkLog" (when-let [bootings (re-seq #"Booting" msg)]
+                       (s.stats/record ::reboot {} (count bootings)))
           :ignore)
         (future (alert-as-needed sys)))
       (catch Exception ex
