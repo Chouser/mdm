@@ -51,9 +51,13 @@
             (deliveryComplete [_ token]
               (ss/record ::session {:event :delivered} 1)
               (println "mqtt delivery complete:" token))
-            (connectComplete [_ reconnect uri]
+            (connectComplete [_ reconnect? uri]
               (ss/record ::session {:event :connected} 1)
-              (println "mqtt connect complete:" reconnect uri))
+              (println "mqtt connect complete:"
+                       (if reconnect?
+                         "paho-auto-reconnct"
+                         "pano-no-auto-reconnect")
+                       uri))
             (authPacketArrived [_ reasonCode properties]
               (ss/record ::session {:event :auth-packet} 1)
               (println "mqtt auth packet arrived:" reasonCode properties)))]
