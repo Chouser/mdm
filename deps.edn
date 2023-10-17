@@ -1,5 +1,4 @@
-{:deps {
-        org.apache.logging.log4j/log4j-api {:mvn/version "2.20.0"}
+{:deps {org.apache.logging.log4j/log4j-api {:mvn/version "2.20.0"}
         org.apache.logging.log4j/log4j-core {:mvn/version "2.20.0"}
         org.eclipse.paho/org.eclipse.paho.mqttv5.client {:mvn/version "1.2.5"}
         org.igniterealtime.smack/smack-tcp {:mvn/version "4.4.6"}
@@ -8,5 +7,9 @@
         org.igniterealtime.smack/smack-java8 {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-xmlparser-xpp3 {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-resolver-javax {:mvn/version "4.4.6"}
-        org.xerial/sqlite-jdbc {:mvn/version "3.42.0.0"}
-        }}
+        org.xerial/sqlite-jdbc {:mvn/version "3.42.0.0"}}
+ :aliases {:test {:extra-paths ["test"]
+                  :extra-deps {io.github.cognitect-labs/test-runner
+                               {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+                  :main-opts ["-m" "cognitect.test-runner"]
+                  :exec-fn cognitect.test-runner.api/test}}}

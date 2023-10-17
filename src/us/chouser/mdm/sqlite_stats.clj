@@ -118,7 +118,7 @@
      (if-not old
        (start config)
        (do
-         (println "ERROR: global collector already exists; refusing to start another")
+         (println "WARNING: global collector already exists; refusing to start another")
          old)))))
 
 (defn stop-global []

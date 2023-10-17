@@ -16,71 +16,56 @@
     (println "Using secrets:" (pr-str filename))
     (partial get (edn/read-string (slurp filename)))))
 
-(def pressure-alert-secs 660)
-(def weight-alert-secs 660)
-(def alert-reminder-secs 900)
-(def fudge-secs 5)
+(def signal-alert-ms (* 660 1000))
+(def alert-reminder-ms (* 900 1000))
+(def fudge-ms (* 5 1000))
 
-(defn time-str [seconds]
-  (cond
-    (< seconds   100) (str seconds " seconds")
-    (< seconds   597) (format "%.1f minutes" (/ seconds 60.0))
-    (< seconds  5970) (format "%.0f minutes" (/ seconds 60.0))
-    (< seconds 35820) (format "%.1f hours"   (/ seconds 3600.0))
-    :else             (format "%.0f hours"   (/ seconds 3600.0))))
+(def alert-topics #{"Weight" "Pressure"})
+
+(defn ms-str [ms]
+  (let [s (/ ms 1000)]
+    (cond
+      (< s   100) (str s " seconds")
+      (< s   597) (format "%.1f minutes" (/ s 60.0))
+      (< s  5970) (format "%.0f minutes" (/ s 60.0))
+      (< s 35820) (format "%.1f hours"   (/ s 3600.0))
+      :else       (format "%.0f hours"   (/ s 3600.0)))))
 
 (defn check-state
-  "Pure function to decide what alert message to send if any. Return updated
+  "Pure function to decide what alert msg to send if any. Return updated
   state."
-  [state now]
-  (let [sfx (get-secret :alert-suffix)
-        p-since (quot (- now (:pressure-ts state now)) 1000)
-        w-since (quot (- now (:weight-ts state now)) 1000)
-        m-since (quot (- now (:msg-ts state now)) 1000)
-        branch [(if (:pressure-alerted? state) 1 0)
-                (if (:weight-alerted? state) 1 0)
-                (if (< pressure-alert-secs p-since) 1 0)
-                (if (< weight-alert-secs w-since) 1 0)]
-        msg
-        , (case branch
-            [0 0 0 0] nil
-            [0 0 0 1] (str "Alert! No Weight signal received for " (time-str w-since) "." sfx)
-            [0 0 1 0] (str "Alert! No Pressure signal received for " (time-str p-since) "." sfx)
-            [0 0 1 1] (str "Alert! No Pressure signal received for " (time-str p-since)
-                           ", and no Weight signal for " (time-str w-since) "." sfx)
-            [0 1 0 0] "Cleared all alerts: Weight signal received."
-            [0 1 0 1] nil
-            [0 1 1 0] (str "Alert! No Pressure signal received for " (time-str p-since)
-                           ". But weirdly a Weight signal was just received, "
-                           "so that alert is cleared." sfx)
-            [0 1 1 1] (str "Another alert! No Pressure signal received for " (time-str p-since)
-                           ", in addition to the Weight alert." sfx)
-            [1 0 0 0] "Cleared all alerts: Pressure signal received."
-            [1 0 0 1] (str "Alert! No Weight signal received for " (time-str w-since)
-                           ". But weirdly a Pressure signal was just received, "
-                           "so that alert is cleared." sfx)
-            [1 0 1 0] nil
-            [1 0 1 1] (str "Another alert! No Weight signal received for " (time-str w-since)
-                           ", in addition to the Pressure alert." sfx)
-            [1 1 0 0] "Cleared all alerts: Weight and Pressure signals received."
-            [1 1 0 1] "Cleared one alert: Pressure signal received; still waiting for a Weight signal."
-            [1 1 1 0] "Cleared one alert: Weight signal received; still waiting for a Pressure signal."
-            [1 1 1 1] nil)
-        msg (or msg
-                (when (and (< alert-reminder-secs m-since)
-                           (or (:pressure-alerted? state)
-                               (:weight-alerted? state)))
-                  (str "Still alerted"
-                       (when (:pressure-alerted? state)
-                         (str ", " (time-str p-since) " since last Pressure signal"))
-                       (when (:weight-alerted? state)
-                         (str ", " (time-str w-since) " since last Weight signal"))
-                       "." sfx)))]
-    (assoc state
-           :pressure-alerted? (< pressure-alert-secs p-since)
-           :weight-alerted? (< weight-alert-secs w-since)
-           :msg-ts (if msg now (:msg-ts state now))
-           :alert-msg msg)))
+  [{:keys [alerted?] :as state} now-ts]
+  (let [[[_ oldest-signal-ts] :as topic-tss]
+        , (->> alert-topics
+               (map (partial find (:topic-ts state)))
+               (sort-by val))
+        alerted-topics
+        , (->> topic-tss
+               (take-while #(< signal-alert-ms
+                               (- now-ts (val %))))
+               (map #(format "%s (%s ago)"
+                             (key %)
+                             (ms-str (- now-ts (val %)))))
+               (str/join ", "))
+        last-msg-ts (:last-msg-ts state now-ts)
+        over-age-threshold? (<= signal-alert-ms
+                                (- now-ts oldest-signal-ts))
+        msg (if over-age-threshold?
+              (if-not alerted?
+                (str "Alert! " alerted-topics)
+                (when (<= alert-reminder-ms (- now-ts last-msg-ts))
+                  (str "Still alerted. " alerted-topics)))
+              (when alerted?
+                "Cleared alert."))]
+    (merge state
+           {:alerted? over-age-threshold?
+            :alert-msg msg
+            :check-state-ts (+ fudge-ms
+                               (if over-age-threshold?
+                                 (+ last-msg-ts alert-reminder-ms)
+                                 (+ oldest-signal-ts signal-alert-ms)))}
+           (when msg
+             {:last-msg-ts now-ts}))))
 
 (defn send-contact-text [conn contact text]
   (let [{:keys [user-address muc-address password]}
@@ -121,16 +106,6 @@
         (jab/send-chat conn "chouser@xabber.org" "ok")
         (finally (jab/disconnect conn))))))
 
-(defn alert-as-needed [sys]
-  (let [{:keys [state]}
-        , (swap! sys update :state
-                 check-state
-                 (System/currentTimeMillis))
-        msg (:alert-msg state)]
-    (when msg
-      (send-group-text (if (re-find #"Still" msg) :reminder :alert)
-                       msg))))
-
 (defn reschedule! [sys f k secs]
   (some-> @sys ^java.util.concurrent.Future (get-in [:futures k]) (.cancel false))
   (swap! sys assoc-in [:futures k]
@@ -139,9 +114,20 @@
                     (long secs)
                     java.util.concurrent.TimeUnit/SECONDS)))
 
-(defn alert-reminder [sys]
-  (alert-as-needed sys)
-  (reschedule! sys #'alert-reminder :alert-reminder (+ fudge-secs alert-reminder-secs)))
+(defn alert-as-needed [sys]
+  (let [[old-sys new-sys]
+        , (swap-vals! sys update :state
+                      check-state
+                      (System/currentTimeMillis))]
+    (when (not= (-> old-sys :state :check-state-ts)
+                (-> new-sys :state :check-state-ts))
+      (reschedule! sys #'alert-as-needed :alert-as-needed
+                   (quot (- (-> new-sys :state :check-state-ts)
+                            (System/currentTimeMillis))
+                         1000)))
+    (when-let [msg (-> new-sys :state :alert-msg)]
+      (send-group-text (if (re-find #"Still" msg) :reminder :alert)
+                       msg))))
 
 (defn seconds-til-daily-report [now-millis]
   (let [target-time (java.time.LocalTime/of 15 0) ;; 3pm local
@@ -167,7 +153,7 @@
      (if-not (:stat-start old)
        (str "Started and connected version " version)
        (format "Over the last %s, I've seen %s. This is version %s"
-               (time-str (/ (- now (:stat-start old)) 1000.0))
+               (ms-str (- now (:stat-start old)))
                (->> old :metric
                     (map (fn [[topic n]]
                            (format "%d %s signals" n topic)))
@@ -184,26 +170,18 @@
   (when-not (:stop? @sys)
     (try
       (let [now (System/currentTimeMillis)
-            prev-state (:state @sys)]
-        (swap! sys update-in [:metric topic] (fnil inc 0))
-        (case topic
-          "Pressure" (do
-                       (swap! sys assoc-in [:state :pressure-ts] now)
-                       (when (re-matches #"[-.\d]+" msg)
-                         (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
-                       (when-let [prev (:pressure-ts prev-state)]
-                         (s.stats/record ::interval {:topic topic} (- now prev)))
-                       (reschedule! sys #'alert-as-needed :pressure (+ fudge-secs pressure-alert-secs)))
-          "Weight" (do
-                     (swap! sys assoc-in [:state :weight-ts] now)
-                     (when (re-matches #"[-.\d]+" msg)
-                       (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
-                     (when-let [prev (:weight-ts prev-state)]
-                       (s.stats/record ::interval {:topic topic} (- now prev)))
-                     (reschedule! sys #'alert-as-needed :weight (+ fudge-secs weight-alert-secs)))
-          "BoinkLog" (when-let [bootings (re-seq #"Booting" msg)]
-                       (s.stats/record ::reboot {} (count bootings)))
-          :ignore)
+            [prev-sys _]
+            , (swap-vals! sys
+                          #(-> %
+                               (update-in [:metric topic] (fnil inc 0))
+                               (assoc-in [:state :topic-ts topic] now)))]
+        (when-let [prev (-> prev-sys :state :topic-ts (get topic))]
+          (s.stats/record ::interval {:topic topic} (- now prev)))
+        (when (re-matches #"[-.\d]+" msg)
+          (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
+        (when (= "BoinkLog" topic)
+          (when-let [bootings (re-seq #"Booting" msg)]
+            (s.stats/record ::reboot {} (count bootings))))
         (future (alert-as-needed sys)))
       (catch Exception ex
         (prn :on-mqtt-msg ex)))))
@@ -211,7 +189,10 @@
 (defn start []
   (s.stats/start-global {:filename (get-secret :metrics-filename)
                          :period-secs (get-secret :metrics-period-secs (* 5 60))})
-  (doto (atom {})
+  (doto (atom {:state {:topic-ts (->> (map vector
+                                           alert-topics
+                                           (repeat (System/currentTimeMillis)))
+                                      (into {}))}})
     ((fn [sys]
        (swap! sys assoc
               :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
@@ -219,7 +200,7 @@
                                         :subs [{:topic "#"
                                                 :msg-fn #(on-mqtt-msg sys %)}]})
               :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))))
-    (alert-reminder)
+    (alert-as-needed)
     (daily-report)))
 
 (defn stop [sys]
