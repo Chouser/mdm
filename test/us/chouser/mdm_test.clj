@@ -1,7 +1,8 @@
 (ns us.chouser.mdm-test
-  (:require [us.chouser.mdm :as mdm]
-            [us.chouser.mdm.sqlite-stats :as s.stats]
-            [clojure.test :as t :refer [deftest is testing]]))
+  (:require [clojure.string :as str]
+            [clojure.test :as t :refer [deftest is testing]]
+            [us.chouser.mdm :as mdm]
+            [us.chouser.mdm.sqlite-stats :as s.stats]))
 
 (deftest test-check-state
   (is (= {:alerted? false
@@ -60,3 +61,22 @@
         (mdm/on-mqtt-msg sys {:topic "BoinkLog" :msg msg}))
       (is (= (inc prev-reboots)
              (count-reboots))))))
+
+(deftest daily-report
+  (let [msgs (atom [])]
+    (with-redefs [mdm/send-group-text #(swap! msgs conj %2)
+                  mdm/reschedule! (constantly :ignore)]
+      (doto (atom {})
+        mdm/daily-report
+        (swap! assoc
+               :stat-start (- (System/currentTimeMillis)
+                              200000)
+               :metric {"Bar" 200
+                        "Foo" 100})
+        mdm/daily-report)
+      (is (str/starts-with?
+           (first @msgs)
+           "Started and connected version"))
+      (is (str/starts-with?
+           (second @msgs)
+           "Over the last 3.3 minutes, I've seen 200 Bar signals, 100 Foo signals. This is version")))))

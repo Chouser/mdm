@@ -155,6 +155,7 @@
        (format "Over the last %s, I've seen %s. This is version %s"
                (ms-str (- now (:stat-start old)))
                (->> old :metric
+                    (sort-by #(- (val %)))
                     (map (fn [[topic n]]
                            (format "%d %s signals" n topic)))
                     (str/join ", "))
