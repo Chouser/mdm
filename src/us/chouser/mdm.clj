@@ -96,16 +96,6 @@
             (finally (jab/disconnect conn))))
         (println target "TEST TEXT:" text)))))
 
-(defn send-m []
-  (if-let [pw (get-secret :xmpp-password)]
-    (let [conn (jab/connect {:host "xabber.org"
-                             :username "ottowarburg"
-                             :password pw})]
-      (prn :conn conn)
-      (try
-        (jab/send-chat conn "chouser@xabber.org" "ok")
-        (finally (jab/disconnect conn))))))
-
 (defn reschedule! [sys f k secs]
   (some-> @sys ^java.util.concurrent.Future (get-in [:futures k]) (.cancel false))
   (swap! sys assoc-in [:futures k]
