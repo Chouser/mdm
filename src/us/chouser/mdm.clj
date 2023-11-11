@@ -11,7 +11,7 @@
 (def version "1.8")
 
 (def get-secret
-  (let [[filename] (->> ["secrets.edn" "secrets-test.edn"]
+  (let [[filename] (->> ["secrets-test.edn" "secrets.edn"]
                         (filter #(.exists (io/file %))))]
     (println "Using secrets:" (pr-str filename))
     (partial get (edn/read-string (slurp filename)))))
