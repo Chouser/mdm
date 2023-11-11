@@ -2,6 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [us.chouser.mdm.chat :as chat]
             [us.chouser.mdm.jab :as jab]
             [us.chouser.mdm.mqtt :as mqtt]
             [us.chouser.mdm.sqlite-stats :as s.stats]))
@@ -21,6 +22,9 @@
 (def fudge-ms (* 5 1000))
 
 (def alert-topics #{"Weight" "Pressure"})
+
+(def bot-name-ptn
+  (re-pattern (str "(?i)\\b\\Q" (get-secret :bot-name) "\\E\\b")))
 
 (defn ms-str [ms]
   (let [s (/ ms 1000.0)]
@@ -177,6 +181,59 @@
       (catch Exception ex
         (prn :on-mqtt-msg ex)))))
 
+(defn on-jabber-msg [{:keys [chat-log] :as chat-state}
+                     jab
+                     {:keys [id body from] :as msg}]
+  (if (or (nil? body)
+          (some #(= (:id %) id) chat-log) ;; already processed this chat-id
+          (and (= :groupchat (:type msg)) ;; groupchat without mentioning Otto
+               (not (re-find bot-name-ptn body))))
+    (do (prn :not-for-me msg)
+        chat-state)
+    (let [[_ muc-addr from-nick] (re-matches #"([^/]*)/(.*)" from)
+          {:keys [send-chat] :as new-chat-state}
+          , (chat/apply-chat-str! chat-state (chat/format-time (chat/now)) body id)
+          new-chat-state (dissoc new-chat-state :send-chat)]
+      (prn :sending send-chat)
+      (if (= :groupchat (:type msg))
+        (let [muc (get (:mucs @jab) muc-addr)]
+          (jab/send-muc muc send-chat))
+        (jab/send-chat (:conn @jab) from send-chat))
+      (spit (get-secret :chat-state-file)
+            (prn-str new-chat-state))
+      new-chat-state)))
+
+(defn jabber-start []
+  (let [jab (atom {:conn nil
+                   :chat-state (agent (try
+                                        (read-string (slurp (get-secret :chat-state-file)))
+                                        (catch Exception ex
+                                          chat/init-state))
+                                      :error-handler #(println "chat agent error" (pr-str %&)))})
+        conn (-> {:host "xabber.org"
+                  :username "ottowarburg"
+                  :password (get-secret :xmpp-password)
+                  :on-message #(send-off (:chat-state @jab) on-jabber-msg jab %)}
+                 jab/connect)
+        mucs (->> (get-secret :contacts)
+                  vals
+                  (filter :muc-address)
+                  (map (fn [{:keys [muc-address password]}]
+                         (prn :muc muc-address)
+                         [muc-address
+                          (->> {:address muc-address
+                                :password password
+                                :nickname (get-secret :bot-name)}
+                               (jab/join-muc conn))]))
+                  (into {}))]
+    (swap! jab assoc
+           :conn conn
+           :mucs mucs)
+    jab))
+
+(defn jabber-stop [jab]
+  (jab/disconnect (:conn @jab)))
+
 (defn start []
   (s.stats/start-global {:filename (get-secret :metrics-filename)
                          :period-secs (get-secret :metrics-period-secs (* 5 60))})
@@ -184,6 +241,7 @@
                                            alert-topics
                                            (repeat (System/currentTimeMillis)))
                                       (into {}))}})
+    (swap! assoc :jab (jabber-start))
     ((fn [sys]
        (swap! sys assoc
               :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
@@ -199,6 +257,7 @@
   (->> @sys :futures vals
        (run! #(.cancel ^java.util.concurrent.Future % false)))
   (mqtt/stop (:mqtt-client @sys))
+  (jabber-stop (:jab @sys))
   (when-let [s ^java.util.concurrent.ExecutorService (:scheduler sys)]
     (.shutdown s)
     (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS))
@@ -212,5 +271,25 @@
 
   (def sys (start))
   (stop sys)
+
+  (defn on-msg [x]
+    (prn :msg x))
+
+  (def conn
+    (-> {:host "xabber.org"
+         :username "ottowarburg"
+         :password (get-secret :xmpp-password)
+          :on-message #'on-msg}
+        jab/connect))
+
+  (def muc
+    (->> {:address "gptest@conference.xabber.org"
+          :password "oinkoink"
+          :nickname "mybot"}
+         (jab/join-muc conn)))
+
+  (jab/send-muc muc "hi 00")
+
+  (jab/disconnect conn)
 
   )

@@ -7,7 +7,8 @@
         org.igniterealtime.smack/smack-java8 {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-xmlparser-xpp3 {:mvn/version "4.4.6"}
         org.igniterealtime.smack/smack-resolver-javax {:mvn/version "4.4.6"}
-        org.xerial/sqlite-jdbc {:mvn/version "3.42.0.0"}}
+        org.xerial/sqlite-jdbc {:mvn/version "3.42.0.0"}
+        com.github.chouser/gryphonport {:git/sha "53a6e53b43a9c7c2f0b4c35bf19bd4a40d475e58"}}
  :aliases {:test {:extra-paths ["test"]
                   :extra-deps {io.github.cognitect-labs/test-runner
                                {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
