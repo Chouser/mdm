@@ -63,14 +63,15 @@
                 (when (<= alert-reminder-ms (- now-ts last-msg-ts))
                   (str "Still alerted. " alerted-topics)))
               (when alerted?
-                "Cleared alert."))]
+                "Cleared alert."))
+        check-state-ts (+ fudge-ms
+                          (if over-age-threshold?
+                            (+ now-ts alert-reminder-ms)
+                            (+ oldest-signal-ts signal-alert-ms)))]
     (merge state
            {:alerted? over-age-threshold?
             :alert-msg msg
-            :check-state-ts (+ fudge-ms
-                               (if over-age-threshold?
-                                 (+ last-msg-ts alert-reminder-ms)
-                                 (+ oldest-signal-ts signal-alert-ms)))}
+            :check-state-ts check-state-ts}
            (when msg
              {:last-msg-ts now-ts}))))
 

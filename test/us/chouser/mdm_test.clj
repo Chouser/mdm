@@ -5,18 +5,22 @@
             [us.chouser.mdm.sqlite-stats :as s.stats]))
 
 (deftest test-check-state
-  (is (= {:alerted? false
-          :alert-msg "Cleared alert."
-          :last-msg-ts 100
-          :check-state-ts 665004
-          :topic-ts {"Pressure" 5
-                     "Weight" 4
-                     "Other" 3}}
-         (mdm/check-state {:alerted? true
-                           :topic-ts {"Pressure" 5
-                                      "Weight" 4
-                                      "Other" 3}}
-                          100)))
+  (with-redefs [mdm/signal-alert-ms (* 660 1000)
+                mdm/fudge-ms 5000]
+    (is (= {:alerted? false
+            :alert-msg "Cleared alert."
+            :last-msg-ts 100
+            :check-state-ts 665004
+            :topic-ts {"Pressure" 5
+                       "Weight" 4
+                       "BoinkT" 6
+                       "Other" 3}}
+           (mdm/check-state {:alerted? true
+                             :topic-ts {"Pressure" 5
+                                        "Weight" 4
+                                        "BoinkT" 6
+                                        "Other" 3}}
+                            100))))
 
   (is (= [nil
           nil
