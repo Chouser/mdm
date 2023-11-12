@@ -2,6 +2,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [clojure.stacktrace :refer [print-cause-trace]]
             [us.chouser.mdm.chat :as chat]
             [us.chouser.mdm.jab :as jab]
             [us.chouser.mdm.mqtt :as mqtt]
@@ -109,21 +110,26 @@
                     java.util.concurrent.TimeUnit/SECONDS)))
 
 (defn alert-as-needed [sys]
-  (let [[old-sys new-sys]
-        , (swap-vals! sys update :state
-                      check-state
-                      (System/currentTimeMillis))]
-    (when (not= (-> old-sys :state :check-state-ts)
-                (-> new-sys :state :check-state-ts))
-      (reschedule! sys #'alert-as-needed :alert-as-needed
-                   (quot (- (-> new-sys :state :check-state-ts)
-                            (System/currentTimeMillis))
-                         1000)))
-    (when-let [msg (-> new-sys :state :alert-msg)]
-      (send-group-text (if (re-find #"Still" msg) :reminder :alert)
-                       msg))))
+  (try
+    (let [[old-sys new-sys]
+          , (swap-vals! sys update :state
+                        check-state
+                        (System/currentTimeMillis))]
+      (when (not= (-> old-sys :state :check-state-ts)
+                  (-> new-sys :state :check-state-ts))
+        (let [check-in-secs (quot (- (-> new-sys :state :check-state-ts)
+                                     (System/currentTimeMillis))
+                                  1000)]
+          (reschedule! sys #'alert-as-needed :alert-as-needed check-in-secs)))
+      (when-let [msg (-> new-sys :state :alert-msg)]
+        (send-group-text (if (re-find #"Still" msg) :reminder :alert)
+                         msg)))
+    (catch Throwable ex
+      (print-cause-trace ex)
+      (throw ex))))
 
 (defn seconds-til-daily-report [now-millis]
+  ;; Note this doesn't do the right thing across DST changes:
   (let [target-time (java.time.LocalTime/of 15 0) ;; 3pm local
         instant (java.time.Instant/ofEpochMilli now-millis)
         zone (java.time.ZoneId/systemDefault)
