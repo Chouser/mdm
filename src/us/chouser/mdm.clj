@@ -252,7 +252,7 @@
                                            alert-topics
                                            (repeat (System/currentTimeMillis)))
                                       (into {}))}})
-    (swap! assoc :jab (jabber-start))
+    ;;(swap! assoc :jab (jabber-start))
     ((fn [sys]
        (swap! sys assoc
               :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
@@ -268,7 +268,7 @@
   (->> @sys :futures vals
        (run! #(.cancel ^java.util.concurrent.Future % false)))
   (mqtt/stop (:mqtt-client @sys))
-  (jabber-stop (:jab @sys))
+  ;;(jabber-stop (:jab @sys))
   (when-let [s ^java.util.concurrent.ExecutorService (:scheduler sys)]
     (.shutdown s)
     (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS))
