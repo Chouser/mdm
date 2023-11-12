@@ -48,19 +48,20 @@
       count))
 
 (deftest test-booting-metrics
-  (s.stats/with-collector {:filename "metrics-test.db"
-                           :period-secs 30}
-    (let [sys (atom {})
-          msg "2023-09-09T03:18:27	Weights: 727.3628, 727.28, 727.3148, 727.3192, 727.3464, Result=727.3246
+  (with-redefs [mdm/alert-as-needed (constantly nil)]
+    (s.stats/with-collector {:filename "metrics-test.db"
+                             :period-secs 30}
+      (let [sys (atom {})
+            msg "2023-09-09T03:18:27	Weights: 727.3628, 727.28, 727.3148, 727.3192, 727.3464, Result=727.3246
 2023-09-09T03:18:27	Connecting to ... pressure sensor.
 2023-09-09T03:18:27	Booting b'Boink-v1.1
 2023-09-09T03:18:28	Pressure: 97.4151, 96.65471, 97.24437, 95.52776, 97.19907, Result=96.8082"
-          prev-reboots (count-reboots)]
-      (s.stats/with-collector {:filename "metrics-test.db"
-                               :period-secs 30}
-        (mdm/on-mqtt-msg sys {:topic "BoinkLog" :msg msg}))
-      (is (= (inc prev-reboots)
-             (count-reboots))))))
+            prev-reboots (count-reboots)]
+        (s.stats/with-collector {:filename "metrics-test.db"
+                                 :period-secs 30}
+          (mdm/on-mqtt-msg sys {:topic "BoinkLog" :msg msg}))
+        (is (= (inc prev-reboots)
+               (count-reboots)))))))
 
 (deftest daily-report
   (let [msgs (atom [])]

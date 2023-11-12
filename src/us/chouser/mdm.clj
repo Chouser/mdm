@@ -22,7 +22,7 @@
 (def alert-reminder-ms (* 900 1000))
 (def fudge-ms (* 5 1000))
 
-(def alert-topics #{"Weight" "Pressure"})
+(def alert-topics #{"Weight" "Pressure" "BoinkT"})
 
 (def bot-name-ptn
   (re-pattern (str "(?i)\\b\\Q" (get-secret :bot-name) "\\E\\b")))
@@ -40,17 +40,19 @@
   "Pure function to decide what alert msg to send if any. Return updated
   state."
   [{:keys [alerted?] :as state} now-ts]
-  (let [[[_ oldest-signal-ts] :as topic-tss]
+  (let [[{oldest-signal-ts :ts} :as topic-tss]
         , (->> alert-topics
-               (map (partial find (:topic-ts state)))
-               (sort-by val))
+               (map (fn [topic]
+                      {:topic topic
+                       :ts (get (:topic-ts state) topic 0)}))
+               (sort-by :ts))
         alerted-topics
         , (->> topic-tss
                (take-while #(< signal-alert-ms
-                               (- now-ts (val %))))
+                               (- now-ts (:ts %))))
                (map #(format "%s (%s ago)"
-                             (key %)
-                             (ms-str (- now-ts (val %)))))
+                             (:topic %)
+                             (ms-str (- now-ts (:ts %)))))
                (str/join ", "))
         last-msg-ts (:last-msg-ts state now-ts)
         over-age-threshold? (<= signal-alert-ms
