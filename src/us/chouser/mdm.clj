@@ -29,7 +29,7 @@
 (defn ms-str [ms]
   (let [s (/ ms 1000.0)]
     (cond
-      (< s   100) (format "%d seconds" s)
+      (< s   100) (format "%.1f seconds" s)
       (< s   597) (format "%.1f minutes" (/ s 60.0))
       (< s  5970) (format "%.0f minutes" (/ s 60.0))
       (< s 35820) (format "%.1f hours"   (/ s 3600.0))
