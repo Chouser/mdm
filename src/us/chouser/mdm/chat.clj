@@ -106,7 +106,7 @@
      [(when-let [{:keys [current-time suppressions]} (:status entry)]
         [(when current-time ["The current time is " current-time "\n"])
          (if (empty? suppressions)
-           "There are no supressions scheduled\n"
+           "There are no suppressions scheduled\n"
            ["Currently scheduled suppressions:\n"
             (for [[from to] (->> suppressions sort)]
               ["- from " from " until " to "\n"])])])

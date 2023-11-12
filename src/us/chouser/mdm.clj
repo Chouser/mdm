@@ -93,6 +93,7 @@
   (let [cts (-> (get-secret :text-targets) (get target))]
     (if-not cts
       (println "ERROR: Bad text target:" (pr-str target))
+      ;; TODO: skip reconnect -- use existing connection and muc(s)
       (if-let [pw (get-secret :xmpp-password)]
         (let [conn (jab/connect {:host "xabber.org"
                                  :username "ottowarburg"
@@ -194,6 +195,7 @@
                      jab
                      {:keys [id body from] :as msg}]
   (if (or (nil? body)
+          (not (#{:chat :groupchat} (:type msg))) ;; maybe an :error msg?
           (some #(= (:id %) id) chat-log) ;; already processed this chat-id
           (and (= :groupchat (:type msg)) ;; groupchat without mentioning Otto
                (not (re-find bot-name-ptn body))))
