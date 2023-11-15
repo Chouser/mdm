@@ -69,7 +69,7 @@
 
 (deftest daily-report
   (let [msgs (atom [])]
-    (with-redefs [mdm/send-group-text #(swap! msgs conj %2)
+    (with-redefs [mdm/send-group-text #(swap! msgs conj %3)
                   mdm/reschedule! (constantly :ignore)]
       (doto (atom {})
         mdm/daily-report

@@ -75,35 +75,20 @@
            (when msg
              {:last-msg-ts now-ts}))))
 
-(defn send-contact-text [conn contact text]
-  (let [{:keys [user-address muc-address password]}
-        , (-> (get-secret :contacts) (get contact))]
-    (cond
-      muc-address
-      , (-> (jab/join-muc conn
-                          {:address muc-address
-                           :password password
-                           :nickname (get-secret :bot-name)})
-            (jab/send-muc text))
-      user-address
-      , (jab/send-chat conn user-address text)
-      :else (println "ERROR: Bad contact:" (pr-str contact)))))
-
-(defn send-group-text [target text]
+(defn send-group-text [jab target text]
   (let [cts (-> (get-secret :text-targets) (get target))]
     (if-not cts
       (println "ERROR: Bad text target:" (pr-str target))
-      ;; TODO: skip reconnect -- use existing connection and muc(s)
-      (if-let [pw (get-secret :xmpp-password)]
-        (let [conn (jab/connect {:host "xabber.org"
-                                 :username "ottowarburg"
-                                 :password pw})]
-          (println target "TEXT:" text)
-          (try
-            (->> cts
-                 (run! #(send-contact-text conn % text)))
-            (finally (jab/disconnect conn))))
-        (println target "TEST TEXT:" text)))))
+      (->> cts
+           (run! #(let [{:keys [user-address muc-address]}
+                        , (-> (get-secret :contacts) (get %))]
+                    (cond
+                      muc-address
+                      , (let [muc (get (:mucs @jab) muc-address)]
+                          (jab/send-muc muc text))
+                      user-address
+                      , (jab/send-chat (:conn @jab) user-address text)
+                      :else (println "ERROR: Bad contact:" (pr-str %)))))))))
 
 (defn reschedule! [sys f k secs]
   (some-> @sys ^java.util.concurrent.Future (get-in [:futures k]) (.cancel false))
@@ -126,7 +111,8 @@
                                   1000)]
           (reschedule! sys #'alert-as-needed :alert-as-needed check-in-secs)))
       (when-let [msg (-> new-sys :state :alert-msg)]
-        (send-group-text (if (re-find #"Still" msg) :reminder :alert)
+        (send-group-text (:jab new-sys)
+                         (if (re-find #"Still" msg) :reminder :alert)
                          msg)))
     (catch Throwable ex
       (print-cause-trace ex)
@@ -153,6 +139,7 @@
                                      (assoc :stat-start now)
                                      (dissoc :metric)))]
     (send-group-text
+     (:jab @sys)
      :status
      (if-not (:stat-start old)
        (str "Started and connected version " version)
