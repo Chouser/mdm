@@ -224,22 +224,22 @@
         conn (-> {:host "xabber.org"
                   :username "ottowarburg"
                   :password (get-secret :xmpp-password)
-                  :on-message #(send-off (:chat-state @jab) on-jabber-msg jab %)}
-                 jab/connect)
-        mucs (->> (get-secret :contacts)
-                  vals
-                  (filter :muc-address)
-                  (map (fn [{:keys [muc-address password]}]
-                         (prn :muc muc-address)
-                         [muc-address
-                          (->> {:address muc-address
-                                :password password
-                                :nickname (get-secret :bot-name)}
-                               (jab/join-muc conn))]))
-                  (into {}))]
-    (swap! jab assoc
-           :conn conn
-           :mucs mucs)
+                  :on-message #(send-off (:chat-state @jab) on-jabber-msg jab %)
+                  :on-connect (fn [conn]
+                                (->> (get-secret :contacts)
+                                     vals
+                                     (filter :muc-address)
+                                     (map (fn [{:keys [muc-address password]}]
+                                            (prn :join-muc muc-address)
+                                            [muc-address
+                                             (->> {:address muc-address
+                                                   :password password
+                                                   :nickname (get-secret :bot-name)}
+                                                  (jab/join-muc conn))]))
+                                     (into {})
+                                     (swap! jab assoc :mucs)))}
+                 jab/connect)]
+    (swap! jab assoc :conn conn)
     jab))
 
 (defn jabber-stop [jab]
@@ -252,7 +252,7 @@
                                            alert-topics
                                            (repeat (System/currentTimeMillis)))
                                       (into {}))}})
-    ;;(swap! assoc :jab (jabber-start))
+    (swap! assoc :jab (jabber-start))
     ((fn [sys]
        (swap! sys assoc
               :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
@@ -268,7 +268,7 @@
   (->> @sys :futures vals
        (run! #(.cancel ^java.util.concurrent.Future % false)))
   (mqtt/stop (:mqtt-client @sys))
-  ;;(jabber-stop (:jab @sys))
+  (jabber-stop (:jab @sys))
   (when-let [s ^java.util.concurrent.ExecutorService (:scheduler sys)]
     (.shutdown s)
     (.awaitTermination s 5 java.util.concurrent.TimeUnit/SECONDS))

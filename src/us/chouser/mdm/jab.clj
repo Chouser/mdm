@@ -14,38 +14,42 @@
 (defn connect
   "on-message will be called with a map containing :id, :from, and :body. It
   must return promptly without making any Jabber callsor other blocking IO"
-  [{:keys [^String host, username, password, on-message]}]
-  (-> (XMPPTCPConnectionConfiguration/builder)
-      (.setXmppDomain host)
-      (.setHost host)
-      (.setUsernameAndPassword username password)
-      (.setCompressionEnabled false)
-      (.build)
-      (XMPPTCPConnection.)
-      (doto
-          (-> ReconnectionManager/getInstanceFor
-              (doto .enableAutomaticReconnection
-                (.setFixedDelay 10) ;; seconds
-                (.setReconnectionPolicy
-                 ReconnectionManager$ReconnectionPolicy/RANDOM_INCREASING_DELAY)))
-        (cond-> on-message
-          (.addSyncStanzaListener (reify org.jivesoftware.smack.StanzaListener
-                                    (processStanza [_ stanza]
-                                      (when (instance? Message stanza)
-                                        (let [msg ^org.jivesoftware.smack.packet.Message stanza]
-                                          (println :jab (str (.toXML msg)))
-                                          (when (.getStanzaId msg)
-                                            (on-message
-                                             {:id (.getStanzaId msg)
-                                              :from (-> msg .getFrom str)
-                                              :type (some-> msg .getType str keyword) ;; chat vs groupchat
-                                              ;;:subject (.getSubject msg)
-                                              ;;:thread (.getThread msg)
-                                              :body (.getBody msg)}))))))
-                                  (reify org.jivesoftware.smack.filter.StanzaFilter
-                                    (accept [_ _] true))))
-          .connect
-          .login)))
+  [{:keys [^String host, username, password, on-message, on-connect]}]
+  (let [conn (-> (XMPPTCPConnectionConfiguration/builder)
+                 (.setXmppDomain host)
+                 (.setHost host)
+                 (.setUsernameAndPassword username password)
+                 (.setCompressionEnabled false)
+                 (.build)
+                 (XMPPTCPConnection.))]
+    (doto (ReconnectionManager/getInstanceFor conn)
+      .enableAutomaticReconnection
+      (.setFixedDelay 10) ;; seconds
+      (.setReconnectionPolicy
+       ReconnectionManager$ReconnectionPolicy/RANDOM_INCREASING_DELAY))
+    (when on-connect
+      (.addConnectionListener
+       conn (reify org.jivesoftware.smack.ConnectionListener
+              (authenticated [this conn resumed?]
+                (prn :jab-authenticated :resumed? resumed?)
+                (on-connect conn)))))
+    (when on-message
+      (.addSyncStanzaListener
+       conn
+       (reify org.jivesoftware.smack.StanzaListener
+         (processStanza [_ stanza]
+           (when (instance? Message stanza)
+             (let [msg ^org.jivesoftware.smack.packet.Message stanza]
+               (println :jab (str (.toXML msg)))
+               (when (.getStanzaId msg)
+                 (on-message
+                  {:id (.getStanzaId msg)
+                   :from (-> msg .getFrom str)
+                   :type (some-> msg .getType str keyword) ;; chat vs groupchat
+                   :body (.getBody msg)}))))))
+       (reify org.jivesoftware.smack.filter.StanzaFilter
+         (accept [_ _] true))))
+    (doto conn .connect .login)))
 
 (defn join-muc [conn {:keys [^String address, nickname, password]}]
   (-> (MultiUserChatManager/getInstanceFor conn)
