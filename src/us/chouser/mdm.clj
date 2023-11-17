@@ -38,7 +38,6 @@
 
 (defn calc-suppression-end-ts [suppressions now-ts]
   (let [now-str (chat/format-ts now-ts)]
-    (prn now-str suppressions)
     (->> suppressions
          (some (fn [[start end]]
                  (when (and (<= (compare start now-str) 0)
