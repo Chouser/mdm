@@ -115,7 +115,7 @@
    raw
    (when (= :user role)
      [(when-let [{:keys [current-time suppressions]} (:status entry)]
-        [(when current-time ["The current time is " current-time "\n"])
+        [(when current-time ["The current time is " current-time " (all times are local to Chicago)\n"])
          (if (empty? suppressions)
            "There are no suppressions scheduled\n"
            ["Currently scheduled suppressions:\n"
@@ -138,6 +138,7 @@
 (defn parse [s]
   (->> (re-seq #".+" s)
        (partition-by #(re-matches #"[A-Z ]+" %))
+       (drop-while #(not (re-matches #"[A-Z ]+" (first %))))
        (partition 2)
        (map (fn [[[section] lines]]
               (case section
@@ -158,10 +159,13 @@
                                         :>> (fn [[_ start]] [:cancel-suppression start])
                                         (throw (ex-info "Bad command" {:cmd line})))))))]
                 "SEND CHAT" [:send-chat (str/join "\n" lines)]
-                "STATUS" nil
-                "CHAT ROOM" nil
-                (throw (ex-info "Bad section" {:section section})))))
-       (into {:role :assistant})))
+                (do
+                  (println "WARNING: Bad section " (pr-str section))
+                  nil))))
+       (into {:role :assistant})
+       (#(if (:send-chat %)
+           %
+           (throw (ex-info "No SEND CHAT reponse from GPT" {:str s}))))))
 
 (defn prompt [{:keys [chat-log suppressions]}
               new-user-entry]
