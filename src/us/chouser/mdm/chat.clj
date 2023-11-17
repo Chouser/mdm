@@ -64,26 +64,26 @@
     :send-chat "All suppressions have been cancelled."}])
 
 (def nope
-  ["Could you please clarify your instructions? I'm having trouble understanding."
-   "I'm sorry, but I didn't quite catch that. Can you rephrase your instructions?"
-   "Your instructions are a bit unclear. Could you explain them differently?"
-   "It seems I'm not following your instructions. Can you restate them?"
-   "I'm having difficulty comprehending your directions. Could you simplify them?"
-   "Your instructions are a bit confusing. Can you provide a different explanation?"
-   "I'm having trouble making sense of your instructions. Could you reword them?"
-   "Sorry, I couldn't grasp your instructions. Can you present them differently?"
-   "I'm struggling to understand your instructions. Can you try explaining in another way?"
-   "Your instructions are a bit too complex for me. Can you simplify them?"
-   "I'm having trouble getting what you mean. Can you give it another shot?"
-   "It's not clear to me. Could you rephrase your instructions, please?"
-   "I'm not quite getting your instructions. Can you make them clearer?"
-   "Your instructions are a bit vague. Could you provide more specific guidance?"
-   "Sorry, I didn't catch that. Could you express your instructions differently?"
-   "I'm having difficulty following your instructions. Can you simplify them?"
-   "It's not quite registering with me. Can you explain it in another way?"
-   "Your instructions are a bit muddled. Can you clarify or rephrase them?"
-   "I'm struggling to comprehend your instructions. Can you give it another go?"
-   "I'm having trouble deciphering your instructions. Can you try a different approach?"])
+  ["I'm a bit lost with your instructions. Can you break them down differently?"
+   "I'm a little confused by your instructions. Could you simplify or clarify them?"
+   "I'm finding it challenging to comprehend your instructions. Could you present them differently?"
+   "I'm finding it hard to follow your instructions. Could you try presenting them differently?"
+   "I'm having a hard time understanding your instructions. Could you phrase them differently?"
+   "I'm having a tough time making sense of your instructions. Can you try explaining differently?"
+   "I'm having difficulty following your instructions. Can you provide a different explanation?"
+   "I'm having difficulty following your instructions. Could you simplify or reword them?"
+   "I'm having trouble grasping your instructions. Could you rephrase them for me?"
+   "I'm having trouble interpreting your instructions. Could you try another way of explaining?"
+   "I'm having trouble making sense of your instructions. Could you provide an alternative explanation?"
+   "I'm struggling to understand your instructions. Could you provide an alternative explanation?"
+   "Your instructions are a bit difficult for me to follow. Could you phrase them differently or simplify?"
+   "Your instructions are a bit puzzling to me. Could you try rewording them?"
+   "Your instructions are a bit unclear to me. Can you try breaking them down differently?"
+   "Your instructions are a bit unclear to me. Could you explain in a different way?"
+   "Your instructions are causing confusion for me. Could you try explaining differently?"
+   "Your instructions are causing some confusion. Could you try expressing them differently?"
+   "Your instructions are not quite registering with me. Could you rephrase them?"
+   "Your instructions aren't quite clear to me. Can you try explaining in a different manner?"])
 
 (def tz (ZoneId/of "America/Chicago"))
 
