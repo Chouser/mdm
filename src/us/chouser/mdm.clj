@@ -36,10 +36,19 @@
       (< s 35820) (format "%.1f hours"   (/ s 3600.0))
       :else       (format "%.0f hours"   (/ s 3600.0)))))
 
+(defn calc-suppression-end-ts [suppressions now-ts]
+  (let [now-str (chat/format-ts now-ts)]
+    (prn now-str suppressions)
+    (->> suppressions
+         (some (fn [[start end]]
+                 (when (and (<= (compare start now-str) 0)
+                            (< (compare now-str end) 0))
+                   (chat/parse-to-ts end)))))))
+
 (defn check-state
   "Pure function to decide what alert msg to send if any. Return updated
   state."
-  [{:keys [alerted?] :as state} now-ts]
+  [{:keys [alerted?] :as state} now-ts suppressions]
   (let [[{oldest-signal-ts :ts} :as topic-tss]
         , (->> alert-topics
                (map (fn [topic]
@@ -57,17 +66,23 @@
         last-msg-ts (:last-msg-ts state now-ts)
         over-age-threshold? (<= signal-alert-ms
                                 (- now-ts oldest-signal-ts))
-        msg (if over-age-threshold?
-              (if-not alerted?
-                (str "Alert! " alerted-topics)
-                (when (<= alert-reminder-ms (- now-ts last-msg-ts))
-                  (str "Still alerted. " alerted-topics)))
-              (when alerted?
-                "Cleared alert."))
-        check-state-ts (+ fudge-ms
-                          (if over-age-threshold?
-                            (+ now-ts alert-reminder-ms)
-                            (+ oldest-signal-ts signal-alert-ms)))]
+        suppression-end-ts (calc-suppression-end-ts suppressions now-ts)
+        msg (when-not suppression-end-ts
+              (if over-age-threshold?
+                (if-not alerted?
+                  (str "Alert! " alerted-topics)
+                  (when (<= alert-reminder-ms (- now-ts last-msg-ts))
+                    (str "Still alerted. " alerted-topics)))
+                (when alerted?
+                  "Cleared alert.")))
+        check-state-ts (min (+ now-ts 60000)
+                            (+ fudge-ms
+                               (or suppression-end-ts
+                                   (if over-age-threshold?
+                                     (+ now-ts alert-reminder-ms)
+                                     (+ oldest-signal-ts signal-alert-ms)))))]
+    (when (< (- check-state-ts now-ts) 4000)
+      (println "WARNING: check-state ts very soon:" (- check-state-ts now-ts)))
     (merge state
            {:alerted? over-age-threshold?
             :alert-msg msg
@@ -103,7 +118,8 @@
     (let [[old-sys new-sys]
           , (swap-vals! sys update :state
                         check-state
-                        (System/currentTimeMillis))]
+                        (System/currentTimeMillis)
+                        (-> @sys :jab deref :chat-state deref :suppressions))]
       (when (not= (-> old-sys :state :check-state-ts)
                   (-> new-sys :state :check-state-ts))
         (let [check-in-secs (quot (- (-> new-sys :state :check-state-ts)

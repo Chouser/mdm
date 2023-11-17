@@ -2,7 +2,7 @@
   (:require [clojure.string :as str]
             [us.chouser.gryphonport.util :as util])
   (:import (java.io PushbackReader)
-           (java.time ZonedDateTime ZoneOffset ZoneId)
+           (java.time Instant LocalDateTime ZonedDateTime ZoneOffset ZoneId)
            (java.time.temporal ChronoUnit)
            (java.time.format DateTimeFormatter)))
 
@@ -85,12 +85,23 @@
    "I'm struggling to comprehend your instructions. Can you give it another go?"
    "I'm having trouble deciphering your instructions. Can you try a different approach?"])
 
-(let [fmt (DateTimeFormatter/ofPattern "yyyy-MM-dd'T'HH:mm (z)")]
+(def tz (ZoneId/of "America/Chicago"))
+
+(let [fmt (-> (DateTimeFormatter/ofPattern "yyyy-MM-dd'T'HH:mm")
+              (.withZone tz))]
   (defn format-time [d]
-    (.format fmt d)))
+    (.format fmt d))
+  (defn parse-time [s]
+    (LocalDateTime/parse s fmt)))
+
+(defn format-ts [ts]
+  (-> ts Instant/ofEpochMilli (.atZone tz) format-time))
+
+(defn parse-to-ts [s]
+  (-> s parse-time (.atZone tz) .toInstant .toEpochMilli))
 
 (defn now []
-  (ZonedDateTime/now (ZoneId/of "America/Chicago")))
+  (ZonedDateTime/now tz))
 
 (defonce *state
   (atom {:chat-log []
@@ -140,7 +151,9 @@
                                     (fn [line]
                                       (condp re-matches line
                                         #"add suppression: (.+) until (.+)"
-                                        :>> (fn [[_ start end]] [:add-suppression start end])
+                                        :>> (fn [[_ start end]]
+                                              (run! parse-time [start end])
+                                              [:add-suppression start end])
                                         #"cancel suppression: (.*)"
                                         :>> (fn [[_ start]] [:cancel-suppression start])
                                         (throw (ex-info "Bad command" {:cmd line})))))))]

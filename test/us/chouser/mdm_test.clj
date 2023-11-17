@@ -10,7 +10,7 @@
     (is (= {:alerted? false
             :alert-msg "Cleared alert."
             :last-msg-ts 100
-            :check-state-ts 665004
+            :check-state-ts 60100
             :topic-ts {"Pressure" 5
                        "Weight" 4
                        "BoinkT" 6
@@ -20,7 +20,8 @@
                                         "Weight" 4
                                         "BoinkT" 6
                                         "Other" 3}}
-                            100))))
+                            100
+                            {}))))
 
   (is (= [nil
           nil
@@ -40,7 +41,8 @@
         (fn [state [now-ts m]]
           (mdm/check-state (reduce #(assoc-in %1 [:topic-ts %2] now-ts)
                                    state m)
-                           now-ts))
+                           now-ts
+                           {}))
         {:topic-ts {"Pressure" 5
                     "Weight" 4
                     "Other" 3}})
