@@ -66,6 +66,7 @@
         over-age-threshold? (<= signal-alert-ms
                                 (- now-ts oldest-signal-ts))
         suppression-end-ts (calc-suppression-end-ts suppressions now-ts)
+        ;;_ (prn :age (- now-ts oldest-signal-ts) topic-tss alerted-topics)
         msg (when-not suppression-end-ts
               (if over-age-threshold?
                 (if-not alerted?
@@ -176,20 +177,21 @@
 (defn on-mqtt-msg [sys {:keys [topic msg]}]
   (when-not (:stop? @sys)
     (try
-      (let [now (System/currentTimeMillis)
-            [prev-sys _]
-            , (swap-vals! sys
-                          #(-> %
-                               (update-in [:metric topic] (fnil inc 0))
-                               (assoc-in [:state :topic-ts topic] now)))]
-        (when-let [prev (-> prev-sys :state :topic-ts (get topic))]
-          (s.stats/record ::interval {:topic topic} (- now prev)))
-        (when (re-matches #"[-.\d]+" msg)
-          (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
-        (when (= "BoinkLog" topic)
-          (when-let [bootings (re-seq #"Booting" msg)]
-            (s.stats/record ::reboot {} (count bootings))))
-        (future (alert-as-needed sys)))
+      (when-not (= msg "unstable")
+        (let [now (System/currentTimeMillis)
+              [prev-sys _]
+              , (swap-vals! sys
+                            #(-> %
+                                 (update-in [:metric topic] (fnil inc 0))
+                                 (assoc-in [:state :topic-ts topic] now)))]
+          (when-let [prev (-> prev-sys :state :topic-ts (get topic))]
+            (s.stats/record ::interval {:topic topic} (- now prev)))
+          (when (re-matches #"[-.\d]+" msg)
+            (s.stats/record ::value {:topic topic} (Double/parseDouble msg)))
+          (when (= "BoinkLog" topic)
+            (when-let [bootings (re-seq #"Booting" msg)]
+              (s.stats/record ::reboot {} (count bootings))))
+          (future (alert-as-needed sys))))
       (catch Exception ex
         (prn :on-mqtt-msg ex)))))
 
