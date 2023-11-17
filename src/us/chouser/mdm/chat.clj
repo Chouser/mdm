@@ -218,6 +218,15 @@
       (.printStackTrace ex)
       (assoc state :send-chat (rand-nth nope)))))
 
+(defn remove-old-suppressions [now-str state]
+  (update state :suppressions
+          #(reduce-kv (fn [s start end]
+                        (if (<= (compare end now-str) 0)
+                          (dissoc s start)
+                          s))
+                      %
+                      %)))
+
 (defn apply-chat-str! [state now-str chat-str & [id]]
   (let [new-user-entry {:role :user
                         :status {:current-time now-str
@@ -228,7 +237,8 @@
          (prompt state)
          util/chatm
          util/content
-         (handle-response state new-user-entry))))
+         (handle-response state new-user-entry)
+         (remove-old-suppressions now-str))))
 
 (def init-state
   {:chat-log []
