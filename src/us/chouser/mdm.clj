@@ -198,25 +198,27 @@
 (defn on-jabber-msg [{:keys [chat-log] :as chat-state}
                      jab
                      {:keys [id body from] :as msg}]
-  (if (or (nil? body)
-          (not (#{:chat :groupchat} (:type msg))) ;; maybe an :error msg?
-          (some #(= (:id %) id) chat-log) ;; already processed this chat-id
-          (and (= :groupchat (:type msg)) ;; groupchat without mentioning Otto
-               (not (re-find bot-name-ptn body))))
-    (do (prn :not-for-me msg)
-        chat-state)
-    (let [[_ muc-addr from-nick] (re-matches #"([^/]*)/(.*)" from)
-          {:keys [send-chat] :as new-chat-state}
-          , (chat/apply-chat-str! chat-state (chat/format-time (chat/now)) body id)
-          new-chat-state (dissoc new-chat-state :send-chat)]
-      (prn :sending send-chat)
-      (if (= :groupchat (:type msg))
-        (let [muc (get (:mucs @jab) muc-addr)]
-          (jab/send-muc muc send-chat))
-        (jab/send-chat (:conn @jab) from send-chat))
-      (spit (get-secret :chat-state-file)
-            (prn-str new-chat-state))
-      new-chat-state)))
+  (let [[_ muc-addr from-nick] (re-matches #"([^/]*)/(.*)" from)]
+    (if (or (nil? body)
+            (not (#{:chat :groupchat} (:type msg))) ;; maybe an :error msg?
+            (some #(= (:id %) id) chat-log) ;; already processed this chat-id
+            (= from-nick (get-secret :bot-name)) ;; from me (don't want to loop!)
+            (and (= :groupchat (:type msg)) ;; groupchat without mentioning Otto
+                 (not (re-find bot-name-ptn body))))
+      (do (prn :not-for-me msg)
+          chat-state)
+      (let [msg (str from-nick " said: " body)
+            {:keys [send-chat] :as new-chat-state}
+            , (chat/apply-chat-str! chat-state (chat/format-time (chat/now)) msg id)
+            new-chat-state (dissoc new-chat-state :send-chat)]
+        (prn :sending send-chat)
+        (if (= :groupchat (:type msg))
+          (let [muc (get (:mucs @jab) muc-addr)]
+            (jab/send-muc muc send-chat))
+          (jab/send-chat (:conn @jab) from send-chat))
+        (spit (get-secret :chat-state-file)
+              (prn-str new-chat-state))
+        new-chat-state))))
 
 (defn jabber-start []
   (let [jab (atom {:conn nil

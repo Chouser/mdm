@@ -12,22 +12,22 @@
    {:role :user
     :status {:current-time "2010-01-01T11:00"
              :suppressions {"2010-01-02T05:00" "2010-01-02T07:00"}}
-    :chat-room "Joe: Otto, will alerts be sent tomorrow morning?"}
+    :chat-room "Joe said: Otto, will alerts be sent tomorrow morning?"}
    {:role :assistant
     :thoughts "Since suppressions are what prevent alerts, I should tell Joe about the suppression."
     :send-chat "Alerts may be sent at any time tomorrow except during the suppression from 5am until 7am."}
    {:role :user
-    :chat-room "Joe: Otto, please suppress alerts after 5 tomorrow."}
+    :chat-room "Joe said: Otto, please suppress alerts after 5 tomorrow."}
    {:role :assistant
     :thoughts "Joe didn't specify enough detail (no am or pm, no end time) so I must not issue a command. I'll ask for more detail."
     :send-chat "Did you mean in the morning or the evening?"}
    {:role :user
-    :chat-room "Joe: Oh I meant in the afternoon, Otto"}
+    :chat-room "Joe said: Oh I meant in the afternoon, Otto"}
    {:role :assistant
     :thoughts "Now I know Joe meant PM, but I still need an end time, so I must not issue a command yet. I'll suggest a more precise instruction."
     :send-chat "I can suppress alerts starting at 5pm tomorrow. Should I allow alerts after 9pm?"}
    {:role :user
-    :chat-room "Joe: That would be perfect, Otto"}
+    :chat-room "Joe said: That would be perfect, Otto"}
    {:role :assistant
     :thoughts "Now I have everything I need to issue a precise command."
     :commands [[:add-suppression "2010-01-02T17:00" "2010-01-02T22:00"]]
@@ -36,19 +36,19 @@
     :status {:current-time "2010-01-01T11:00"
              :suppressions {"2010-01-02T05:00" "2010-01-02T07:00"
                             "2010-01-02T17:00" "2010-01-02T22:00"}}
-    :chat-room "Joe: Cancel next week's suppression, Otto"}
+    :chat-room "Joe said: Cancel next week's suppression, Otto"}
    {:role :assistant
     :thoughts "I don't know what suppression he's talking about, so I must not issue a command. Instead, I'll explain the situation."
     :send-chat "There's no suppression scheduled for next week, but there are two tomorrow."}
    {:role :user
-    :chat-room "Joe: Yeah, Otto, allow alerts tomorrow morning"}
+    :chat-room "Joe said: Yeah, Otto, allow alerts tomorrow morning"}
    {:role :assistant
     :thoughts "In order to allow alerts in the morning, I need to cancel the suppression at that time."
     :commands [[:cancel-suppression "2010-01-02T05:00"]]
     :send-chat "Cancelled. Now there's only one suppression left."}
 
    {:role :user
-    :chat-room "Joe: Otto could you postpone the start time on that one by half an hour?"}
+    :chat-room "Joe said: Otto could you postpone the start time on that one by half an hour?"}
    {:role :assistant
     :thoughts "I can accomplish this by cancelling the old suppression and adding a new one."
     :commands [[:cancel-suppression "2010-01-02T17:00"]
@@ -57,7 +57,7 @@
 
    {:role :user
     :status {:suppressions {"2010-01-02T17:30" "2010-01-02T22:00"}}
-    :chat-room "Joe: Otto, would you cancel that one too?"}
+    :chat-room "Joe said: Otto, would you cancel that one too?"}
    {:role :assistant
     :thoughts "There's only one suppression left, so this instruction is clear and I can issue a command."
     :commands [[:cancel-suppression "2010-01-02T17:30"]]
@@ -266,20 +266,20 @@
               new-state))]
     (-> {:chat-log []
          :suppressions {}}
-        (t "Chris: Otto, no alerts tomorrow morning at 5")
-        (t "Chris: Otto, that suppression should only last 2 hours")
-        (t "Chris: Otto, please silence alerts Wednesday from 4 to 8")
-        (t "Chris: In case I wasn't clear, Otto, the times I gave for Wednesday's suppression are in the evening")
+        (t "Chris said: Otto, no alerts tomorrow morning at 5")
+        (t "Chris said: Otto, that suppression should only last 2 hours")
+        (t "Chris said: Otto, please silence alerts Wednesday from 4 to 8")
+        (t "Chris said: In case I wasn't clear, Otto, the times I gave for Wednesday's suppression are in the evening")
         (doto (-> :suppressions
                   (= {"2013-12-21T05:00" "2013-12-21T07:00",
                       "2013-12-25T16:00" "2013-12-25T20:00"})
                   assert))
-        (t "Chris: Otto, allow alerts tomorrow but keep other suppressions")
-        (t "Chris: Otto, what time is it in New York?")
-        (t "Chris: Otto, silence alerts for the next 3 hours")
+        (t "Chris said: Otto, allow alerts tomorrow but keep other suppressions")
+        (t "Chris said: Otto, what time is it in New York?")
+        (t "Chris said: Otto, silence alerts for the next 3 hours")
         (doto (-> :suppressions
                   (= {"2013-12-20T15:23" "2013-12-20T18:23",
                       "2013-12-25T16:00" "2013-12-25T20:00"})
                   assert))
-        (t "Chris: When are the upcoming suppressions?")
+        (t "Chris said: When are the upcoming suppressions?")
         :suppressions)))
