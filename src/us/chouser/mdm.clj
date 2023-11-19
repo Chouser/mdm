@@ -198,7 +198,9 @@
 (defn on-jabber-msg [{:keys [chat-log] :as chat-state}
                      jab
                      {:keys [id body from] :as msg}]
-  (let [[_ muc-addr from-nick] (re-matches #"([^/]*)/(.*)" from)]
+  (let [[reply-addr from-nick] (if (= :groupchat (:type msg))
+                                 (str/split from #"/")
+                                 [from (re-find #"^[^@]*" from)])]
     (if (or (nil? body)
             (not (#{:chat :groupchat} (:type msg))) ;; maybe an :error msg?
             (some #(= (:id %) id) chat-log) ;; already processed this chat-id
@@ -211,11 +213,13 @@
             {:keys [send-chat] :as new-chat-state}
             , (chat/apply-chat-str! chat-state (chat/format-time (chat/now)) msg id)
             new-chat-state (dissoc new-chat-state :send-chat)]
-        (prn :sending send-chat)
         (if (= :groupchat (:type msg))
-          (let [muc (get (:mucs @jab) muc-addr)]
+          (let [muc (get (:mucs @jab) reply-addr)]
+            (prn :sending :muc muc send-chat)
             (jab/send-muc muc send-chat))
-          (jab/send-chat (:conn @jab) from send-chat))
+          (do
+            (prn :sending :direct reply-addr send-chat)
+            (jab/send-chat (:conn @jab) reply-addr send-chat)))
         (spit (get-secret :chat-state-file)
               (prn-str new-chat-state))
         new-chat-state))))
