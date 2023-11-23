@@ -17,28 +17,23 @@
     :thoughts "Since suppressions are what prevent alerts, I should tell Joe about the suppression."
     :send-chat "Alerts may be sent at any time tomorrow except during the suppression from 5am until 7am."}
    {:role :user
-    :chat-room "Joe said: Otto, please suppress alerts after 5 tomorrow."}
+    :chat-room "Joe said: Suppress alerts after 5 tomorrow."}
    {:role :assistant
-    :thoughts "Joe didn't specify enough detail (no am or pm, no end time) so I must not issue a command. I'll ask for more detail."
+    :thoughts "I don't know exactly what time Joe means by '5'. I'll ask for more detail."
     :send-chat "Did you mean in the morning or the evening?"}
    {:role :user
-    :chat-room "Joe said: Oh I meant in the afternoon, Otto"}
+    :chat-room "Joe said: Oh I meant in the afternoon"}
    {:role :assistant
-    :thoughts "Now I know Joe meant PM, but I still need an end time, so I must not issue a command yet. I'll suggest a more precise instruction."
-    :send-chat "I can suppress alerts starting at 5pm tomorrow. Should I allow alerts after 9pm?"}
-   {:role :user
-    :chat-room "Joe said: That would be perfect, Otto"}
-   {:role :assistant
-    :thoughts "Now I have everything I need to issue a precise command."
-    :commands [[:add-suppression "2010-01-02T17:00" "2010-01-02T22:00"]]
-    :send-chat "Ok, Joe, I will not send alerts between 5 pm and 10 pm tomorrow."}
+    :thoughts "Now I know Joe meant PM, and 4 hours is probably a good duration for a suppression."
+    :commands [[:add-suppression "2010-01-02T17:00" "2010-01-02T21:00"]]
+    :send-chat "Ok, Joe, I will not send alerts between 5 PM and 9 PM tomorrow."}
    {:role :user
     :status {:current-time "2010-01-01T11:00"
              :suppressions {"2010-01-02T05:00" "2010-01-02T07:00"
                             "2010-01-02T17:00" "2010-01-02T22:00"}}
     :chat-room "Joe said: Cancel next week's suppression, Otto"}
    {:role :assistant
-    :thoughts "I don't know what suppression he's talking about, so I must not issue a command. Instead, I'll explain the situation."
+    :thoughts "I can't cancel a suppression that isn't scheduled. Maybe providing Joe some additional info will help"
     :send-chat "There's no suppression scheduled for next week, but there are two tomorrow."}
    {:role :user
     :chat-room "Joe said: Yeah, Otto, allow alerts tomorrow morning"}
@@ -123,8 +118,7 @@
               ["- from " from " until " to "\n"])])])
       (when-let [x (:chat-room entry)] (lines ["CHAT ROOM" x]))])
    (when (= :assistant role)
-     [(when-let [x (:thoughts  entry)] (lines ["THOUGHTS" x]))
-      (let [x (:commands  entry)]
+     [(let [x (:commands  entry)]
         (lines (cons "COMMANDS"
                      (if (empty? x)
                        ["None"]
@@ -142,7 +136,6 @@
        (partition 2)
        (map (fn [[[section] lines]]
               (case section
-                "THOUGHTS" [:thoughts (str/join "\n" lines)]
                 "COMMANDS" [:commands
                             (if (and (= 1 (count lines))
                                      (re-matches #"(?i)none" (first lines)))
@@ -278,7 +271,7 @@
                   (= {"2013-12-21T05:00" "2013-12-21T07:00",
                       "2013-12-25T16:00" "2013-12-25T20:00"})
                   assert))
-        (t "Chris said: Otto, allow alerts tomorrow but keep other suppressions")
+        (t "Chris said: Otto, cancel tomorrow's suppression")
         (t "Chris said: Otto, what time is it in New York?")
         (t "Chris said: Otto, silence alerts for the next 3 hours")
         (doto (-> :suppressions
