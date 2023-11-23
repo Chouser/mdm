@@ -26,37 +26,7 @@
    {:role :assistant
     :thoughts "Now I know Joe meant PM, and 4 hours is probably a good duration for a suppression."
     :commands [[:add-suppression "2010-01-02T17:00" "2010-01-02T21:00"]]
-    :send-chat "Ok, Joe, I will not send alerts between 5 PM and 9 PM tomorrow."}
-   {:role :user
-    :status {:current-time "2010-01-01T11:00"
-             :suppressions {"2010-01-02T05:00" "2010-01-02T07:00"
-                            "2010-01-02T17:00" "2010-01-02T22:00"}}
-    :chat-room "Joe said: Cancel next week's suppression, Otto"}
-   {:role :assistant
-    :thoughts "I can't cancel a suppression that isn't scheduled. Maybe providing Joe some additional info will help"
-    :send-chat "There's no suppression scheduled for next week, but there are two tomorrow."}
-   {:role :user
-    :chat-room "Joe said: Yeah, Otto, allow alerts tomorrow morning"}
-   {:role :assistant
-    :thoughts "In order to allow alerts in the morning, I need to cancel the suppression at that time."
-    :commands [[:cancel-suppression "2010-01-02T05:00"]]
-    :send-chat "Cancelled. Now there's only one suppression left."}
-
-   {:role :user
-    :chat-room "Joe said: Otto could you postpone the start time on that one by half an hour?"}
-   {:role :assistant
-    :thoughts "I can accomplish this by cancelling the old suppression and adding a new one."
-    :commands [[:cancel-suppression "2010-01-02T17:00"]
-               [:add-suppression "2010-01-02T17:30" "2010-01-02T22:00"]]
-    :send-chat "Tomorrow evening's suppression now starts at 5:30pm"}
-
-   {:role :user
-    :status {:suppressions {"2010-01-02T17:30" "2010-01-02T22:00"}}
-    :chat-room "Joe said: Otto, would you cancel that one too?"}
-   {:role :assistant
-    :thoughts "There's only one suppression left, so this instruction is clear and I can issue a command."
-    :commands [[:cancel-suppression "2010-01-02T17:30"]]
-    :send-chat "All suppressions have been cancelled."}])
+    :send-chat "Ok, Joe, I will not send alerts between 5 PM and 9 PM tomorrow."}])
 
 (def nope
   ["I'm a bit lost with your instructions. Can you break them down differently?"
@@ -82,6 +52,7 @@
 
 (def tz (ZoneId/of "America/Chicago"))
 
+;; TODO include day of week when posting current date
 (let [fmt (-> (DateTimeFormatter/ofPattern "yyyy-MM-dd'T'HH:mm")
               (.withZone tz))]
   (defn format-time [d]
