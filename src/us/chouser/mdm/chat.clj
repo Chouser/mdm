@@ -131,12 +131,11 @@
            %
            (throw (ex-info "No SEND CHAT reponse from GPT" {:str s}))))))
 
-(def chat-log-max 8)
-
 (defn prompt [{:keys [chat-log suppressions]}
               new-user-entry]
   (let [context (->> chat-log
-                     (drop (- (count chat-log) chat-log-max))
+                     ;; even number, not to big to keep the bill small
+                     (drop (- (count chat-log) 10))
                      (drop-while #(not= :user (:role %))))]
     (conj (->>
            (concat setup-chat-log
@@ -157,7 +156,8 @@
   (try
     (let [parsed (parse resp-str)]
       (-> state
-          (update :chat-log #(-> (take-last chat-log-max %)
+          ;; Keep plenty of history to avoid re-processing
+          (update :chat-log #(-> (take-last 150 %)
                                  vec
                                  (conj new-user-entry parsed)))
           (update :suppressions
