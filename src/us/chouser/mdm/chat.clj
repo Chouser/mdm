@@ -6,28 +6,6 @@
            (java.time.temporal ChronoUnit)
            (java.time.format DateTimeFormatter)))
 
-(def setup-chat-log
-  [{:role :system
-    :raw "Your name is Otto."}
-   {:role :user
-    :status {:current-time "2010-01-01T11:00"
-             :suppressions {"2010-01-02T05:00" "2010-01-02T07:00"}}
-    :chat-room "Joe said: Otto, will alerts be sent tomorrow morning?"}
-   {:role :assistant
-    :thoughts "Since suppressions are what prevent alerts, I should tell Joe about the suppression."
-    :send-chat "Alerts may be sent at any time tomorrow except during the suppression from 5am until 7am."}
-   {:role :user
-    :chat-room "Joe said: Suppress alerts after 5 tomorrow."}
-   {:role :assistant
-    :thoughts "I don't know exactly what time Joe means by '5'. I'll ask for more detail."
-    :send-chat "Did you mean in the morning or the evening?"}
-   {:role :user
-    :chat-room "Joe said: Oh I meant in the afternoon"}
-   {:role :assistant
-    :thoughts "Now I know Joe meant PM, and 4 hours is probably a good duration for a suppression."
-    :commands [[:add-suppression "2010-01-02T17:00" "2010-01-02T21:00"]]
-    :send-chat "Ok, Joe, I will not send alerts between 5 PM and 9 PM tomorrow."}])
-
 (def nope
   ["I'm a bit lost with your instructions. Can you break them down differently?"
    "I'm a little confused by your instructions. Could you simplify or clarify them?"
@@ -66,8 +44,34 @@
 (defn parse-to-ts [s]
   (-> s parse-time (.atZone tz) .toInstant .toEpochMilli))
 
+(let [fmt (DateTimeFormatter/ofPattern "yyyy-MM-dd'T'HH:mm, 'a' EEEE")]
+  (defn format-current-time [d]
+    (.format fmt d)))
+
 (defn now []
   (ZonedDateTime/now tz))
+
+(def setup-chat-log
+  [{:role :system
+    :raw "Your name is Otto."}
+   {:role :user
+    :status {:current-time (format-current-time (parse-time "2010-01-01T11:00"))
+             :suppressions {"2010-01-02T05:00" "2010-01-02T07:00"}}
+    :chat-room "Joe said: Otto, will alerts be sent tomorrow morning?"}
+   {:role :assistant
+    :thoughts "Since suppressions are what prevent alerts, I should tell Joe about the suppression."
+    :send-chat "Alerts may be sent at any time tomorrow except during the suppression from 5am until 7am."}
+   {:role :user
+    :chat-room "Joe said: Suppress alerts after 5 tomorrow."}
+   {:role :assistant
+    :thoughts "I don't know exactly what time Joe means by '5'. I'll ask for more detail."
+    :send-chat "Did you mean in the morning or the evening?"}
+   {:role :user
+    :chat-room "Joe said: Oh I meant in the afternoon"}
+   {:role :assistant
+    :thoughts "Now I know Joe meant PM, and 4 hours is probably a good duration for a suppression."
+    :commands [[:add-suppression "2010-01-02T17:00" "2010-01-02T21:00"]]
+    :send-chat "Ok, Joe, I will not send alerts between 5 PM and 9 PM tomorrow."}])
 
 (defonce *state
   (atom {:chat-log []
@@ -214,7 +218,8 @@
 
 (defn cpeek [state chat-str]
   (let [new-user-entry {:role :user
-                        :status {:current-time "2013-12-20T15:23"
+                        :status {:current-time
+                                 , (format-current-time (parse-time "2013-12-20T15:23"))
                                  :suppressions (:suppressions state)}
                         :chat-room chat-str}]
     (->> new-user-entry
@@ -222,14 +227,19 @@
          util/pprint-msgs)))
 
 (defn go [chat-str]
-  (let [new-state (apply-chat-str! @*state (format-time (now)) chat-str)]
+  (let [new-state (apply-chat-str! @*state
+                                   (format-current-time (now))
+                                   chat-str)]
     (println (str "SEND CHAT\n" (:send-chat new-state)))
     (reset! *state new-state)))
 
 (defn go-tests []
   (let [t (fn [state chat-str]
             (prn :user chat-str)
-            (let [new-state (apply-chat-str! state "2013-12-20T15:23 (CDT)" chat-str)]
+            (let [new-state (apply-chat-str!
+                             state
+                             (format-current-time (parse-time "2013-12-20T15:23"))
+                             chat-str)]
               (prn :asst (:send-chat new-state))
               new-state))]
     (-> {:chat-log []

@@ -211,7 +211,9 @@
           chat-state)
       (let [msg-str (str from-nick " said: " body)
             {:keys [send-chat] :as new-chat-state}
-            , (chat/apply-chat-str! chat-state (chat/format-time (chat/now)) msg-str id)
+            , (chat/apply-chat-str! chat-state
+                                    (chat/format-current-time (chat/now))
+                                    msg-str id)
             new-chat-state (dissoc new-chat-state :send-chat)]
         (if (= :groupchat (:type msg))
           (let [muc (get (:mucs @jab) reply-addr)]
