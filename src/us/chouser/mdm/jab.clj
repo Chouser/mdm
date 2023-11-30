@@ -11,13 +11,14 @@
 
 (set! *warn-on-reflection* true)
 
+(org.jivesoftware.smack.SmackConfiguration/setDefaultReplyTimeout 30000)
+
 (defn connect
   "on-message will be called with a map containing :id, :from, and :body. It
   must return promptly without making any Jabber callsor other blocking IO"
   [{:keys [^String host, username, password, on-message, on-connect]}]
   (let [conn (-> (XMPPTCPConnectionConfiguration/builder)
                  (.setXmppDomain host)
-                 (.setHost host)
                  (.setUsernameAndPassword username password)
                  (.setCompressionEnabled false)
                  (.build)
@@ -52,9 +53,15 @@
     (doto conn .connect .login)))
 
 (defn join-muc [conn {:keys [^String address, nickname, password]}]
-  (-> (MultiUserChatManager/getInstanceFor conn)
-      (.getMultiUserChat (JidCreate/entityBareFrom address))
-      (doto (.join (Resourcepart/from nickname) password))))
+  (let [muc (-> (MultiUserChatManager/getInstanceFor conn)
+                (.getMultiUserChat (JidCreate/entityBareFrom address)))]
+    (.join muc
+           (-> (.getEnterConfigurationBuilder muc (Resourcepart/from nickname))
+               (.withPassword password)
+               (.requestHistorySince 120) ;; seconds
+               (.timeoutAfter 45000) ;; milliseconds; default was 5000
+               .build))
+    muc))
 
 (defn send-muc [^MultiUserChat muc, ^String body]
   (->> (doto (.createMessage muc)

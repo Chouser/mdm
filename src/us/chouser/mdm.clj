@@ -226,7 +226,21 @@
               (prn-str new-chat-state))
         new-chat-state))))
 
-(defn jabber-start []
+(defn join-all-mucs [jab]
+  (->> (get-secret :contacts)
+       vals
+       (filter :muc-address)
+       (map (fn [{:keys [muc-address password]}]
+              (prn :join-muc muc-address)
+              [muc-address
+               (->> {:address muc-address
+                     :password password
+                     :nickname (get-secret :bot-name)}
+                    (jab/join-muc (:conn @jab)))]))
+       (into {})
+       (swap! jab assoc :mucs)))
+
+(defn jabber-start [after-connect-fn]
   (let [jab (atom {:conn nil
                    :chat-state (agent (try
                                         (read-string (slurp (get-secret :chat-state-file)))
@@ -238,20 +252,11 @@
                   :password (get-secret :xmpp-password)
                   :on-message #(send-off (:chat-state @jab) on-jabber-msg jab %)
                   :on-connect (fn [conn]
-                                (->> (get-secret :contacts)
-                                     vals
-                                     (filter :muc-address)
-                                     (map (fn [{:keys [muc-address password]}]
-                                            (prn :join-muc muc-address)
-                                            [muc-address
-                                             (->> {:address muc-address
-                                                   :password password
-                                                   :nickname (get-secret :bot-name)}
-                                                  (jab/join-muc conn))]))
-                                     (into {})
-                                     (swap! jab assoc :mucs)))}
+                                (swap! jab assoc :conn conn)
+                                (join-all-mucs jab)
+                                (after-connect-fn))}
                  jab/connect)]
-    (swap! jab assoc :conn conn)
+    (swap! jab assoc :conn conn) ;; racing the on-connect above; either is fine
     jab))
 
 (defn jabber-stop [jab]
@@ -260,20 +265,21 @@
 (defn start []
   (s.stats/start-global {:filename (get-secret :metrics-filename)
                          :period-secs (get-secret :metrics-period-secs (* 5 60))})
-  (doto (atom {:state {:topic-ts (->> (map vector
-                                           alert-topics
-                                           (repeat (System/currentTimeMillis)))
-                                      (into {}))}})
-    (swap! assoc :jab (jabber-start))
-    ((fn [sys]
-       (swap! sys assoc
-              :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
-                                        :client-id (get-secret :bot-name)
-                                        :subs [{:topic "#"
-                                                :msg-fn #(on-mqtt-msg sys %)}]})
-              :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))))
-    (alert-as-needed)
-    (daily-report)))
+  (let [sys (atom {:state
+                   {:topic-ts
+                    , (->> (map vector
+                                alert-topics
+                                (repeat (System/currentTimeMillis)))
+                           (into {}))}})]
+    (doto sys
+      (swap! assoc :jab (jabber-start #(daily-report sys)))
+      (swap! assoc
+             :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
+                                       :client-id (get-secret :bot-name)
+                                       :subs [{:topic "#"
+                                               :msg-fn #(on-mqtt-msg sys %)}]})
+             :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))
+      (alert-as-needed))))
 
 (defn stop [sys]
   (swap! sys assoc :stop? true)
