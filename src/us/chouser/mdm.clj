@@ -254,7 +254,7 @@
                   :on-connect (fn [conn]
                                 (swap! jab assoc :conn conn)
                                 (join-all-mucs jab)
-                                (after-connect-fn))}
+                                (after-connect-fn jab))}
                  jab/connect)]
     (swap! jab assoc :conn conn) ;; racing the on-connect above; either is fine
     jab))
@@ -270,15 +270,22 @@
                     , (->> (map vector
                                 alert-topics
                                 (repeat (System/currentTimeMillis)))
-                           (into {}))}})]
+                           (into {}))}
+		    :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0)})]
     (doto sys
-      (swap! assoc :jab (jabber-start #(daily-report sys)))
+      (swap! assoc :jab (jabber-start #(future
+					(try
+					 ;; again, race with the other swap
+					 (swap! sys assoc :jab %)
+					 (daily-report sys)
+					 (catch Exception ex
+					  (prn ex)
+					  (throw ex))))))
       (swap! assoc
              :mqtt-client (mqtt/start {:address (get-secret :mqtt-broker)
                                        :client-id (get-secret :bot-name)
                                        :subs [{:topic "#"
-                                               :msg-fn #(on-mqtt-msg sys %)}]})
-             :scheduler (java.util.concurrent.Executors/newScheduledThreadPool 0))
+                                               :msg-fn #(on-mqtt-msg sys %)}]}))
       (alert-as-needed))))
 
 (defn stop [sys]
