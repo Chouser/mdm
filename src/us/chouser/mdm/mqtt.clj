@@ -26,6 +26,8 @@
                                          (msg-fn {:topic topic
                                                   :msg (str msg)})))]))}))
 
+(declare connect-loop)
+
 (defn connect [a]
   (let [{:keys [address client-id subs]} (:config @a)
         client (MqttClient. address client-id (MemoryPersistence.))
@@ -34,15 +36,8 @@
             (disconnected [_ resp]
               (println "mqtt disconnected:" resp)
               (ss/record ::session {:event :disconnect} 1)
-              (loop []
-                (Thread/sleep 5000)
-                (when (and (not (:stop? @a))
-                           (try (connect a)
-                                false
-                                (catch Exception ex
-                                  (println "mqtt connect failed:" (.getMessage ex))
-                                  true)))
-                  (recur))))
+              (Thread/sleep 5000)
+              (connect-loop a))
             (mqttErrorOccurred [_ ex]
               (ss/record ::session {:event :error} 1)
               (println "mqtt error occurred:" ex))
@@ -73,8 +68,20 @@
     (->> subs (run! #(subscribe client %)))
     a))
 
+(defn connect-loop [a]
+  (when (and (not (:stop? @a))
+             (try (connect a)
+                  false
+                  (catch Exception ex
+                    (println "mqtt connect failed:" (.getMessage ex))
+                    true)))
+    (Thread/sleep 30000)
+    (recur a)))
+
 (defn start [config]
-  (connect (atom {:config config})))
+  (let [a (atom {:config config})]
+    (future (connect-loop a))
+    a))
 
 (defn stop [a]
   (swap! a assoc :stop? true)
